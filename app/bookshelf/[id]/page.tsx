@@ -11,7 +11,8 @@ import { lookupWord } from '@/lib/dictionary';
 import { lookupLocal } from '@/lib/local-dictionary';
 import { useAppStore } from '@/lib/store';
 import { DictionaryResult } from '@/types';
-import { Sparkles, BookOpen, X } from 'lucide-react';
+import { Sparkles, BookOpen, X, FileText, Book } from 'lucide-react';
+import { ImmersiveReader } from '@/components/ImmersiveReader';
 
 export default function BookReaderPage() {
   const params = useParams();
@@ -27,6 +28,12 @@ export default function BookReaderPage() {
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [currentProgress, setCurrentProgress] = useState(0);
   const [totalLocations, setTotalLocations] = useState(0);
+
+  // --- Text Mode State ---
+  const [isTextMode, setIsTextMode] = useState(false);
+  const [chapterText, setChapterText] = useState("");
+  const [isLoadingText, setIsLoadingText] = useState(false);
+  const [currentChapterTitle, setCurrentChapterTitle] = useState("");
   
   // Modal States
   const [showDictionary, setShowDictionary] = useState(false);
@@ -86,6 +93,73 @@ export default function BookReaderPage() {
   }, [params.id]);
 
   // --- Handlers ---
+
+  const toggleTextMode = async () => {
+    if (isTextMode) {
+      setIsTextMode(false);
+      return;
+    }
+
+    if (!rendition) return;
+
+    setIsLoadingText(true);
+    try {
+      const currentLocation = rendition.currentLocation();
+      let index = 0;
+      if (currentLocation && currentLocation.start) {
+        index = currentLocation.start.index;
+      }
+        
+      const section = rendition.book.spine.get(index);
+      
+      // Get chapter title if available
+      const item = rendition.book.navigation.get(section.href);
+      setCurrentChapterTitle(item ? item.label : `Chapter ${index + 1}`);
+      
+      if (section) {
+         // Load the section content
+         const content = await section.load(rendition.book.load.bind(rendition.book));
+         
+         // Parse HTML content
+         const parser = new DOMParser();
+         // EPUB content is usually XHTML or HTML
+         const doc = parser.parseFromString(content, "text/html");
+         
+         // Extract text with newlines
+         let text = "";
+         const walk = (node: Node) => {
+           if (node.nodeType === Node.TEXT_NODE) {
+             text += node.textContent;
+           } else if (node.nodeType === Node.ELEMENT_NODE) {
+             const tag = (node as Element).tagName.toLowerCase();
+             if (tag === 'br') text += '\n';
+             
+             node.childNodes.forEach(walk);
+             
+             if (['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'].includes(tag)) {
+               text += '\n\n';
+             }
+           }
+         };
+         
+         if (doc.body) {
+            walk(doc.body);
+         } else {
+            // Fallback for some XML structures
+            walk(doc as any);
+         }
+         
+         // Clean up excess newlines
+         setChapterText(text.replace(/\n\s*\n/g, '\n\n').trim());
+         setIsTextMode(true);
+      }
+    } catch (err) {
+      console.error("Text extraction failed", err);
+      // Optionally set an error state here
+    } finally {
+      setIsLoadingText(false);
+    }
+  };
 
   const onLocationChanged = (epubcifi: string) => {
     setLocation(epubcifi);
@@ -216,10 +290,39 @@ export default function BookReaderPage() {
   }
 
   return (
-    <div className="h-screen w-screen relative bg-white dark:bg-slate-900">
-      <ReactReader 
-        // @ts-ignore - ReactReader types expect string, but epub.js supports ArrayBuffer
-        url={bookData} 
+    <div className="h-screen w-screen relative bg-white dark:bg-slate-900 overflow-hidden">
+      
+      {/* Text Mode Toggle Button */}
+      <button 
+        onClick={toggleTextMode} 
+        disabled={isLoadingText}
+        className="absolute top-4 right-4 z-50 bg-white/80 dark:bg-slate-800/80 p-2 rounded-full shadow hover:bg-white dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
+        title={isTextMode ? "Switch to Book Mode" : "Switch to Text Mode"}
+      > 
+        {isLoadingText ? (
+          <span className="animate-spin h-5 w-5 border-2 border-emerald-500 border-t-transparent rounded-full" />
+        ) : isTextMode ? (
+          <Book className="w-5 h-5 text-slate-700 dark:text-slate-200" />
+        ) : (
+          <FileText className="w-5 h-5 text-slate-700 dark:text-slate-200" />
+        )}
+      </button>
+
+      {/* Main Content Area */}
+      {isTextMode ? (
+        <div className="h-full w-full overflow-y-auto bg-white dark:bg-slate-900 px-4 pt-16 pb-20">
+          <div className="max-w-3xl mx-auto">
+             <ImmersiveReader 
+               title={currentChapterTitle || "Chapter Text"} 
+               content={chapterText}
+               wordCount={chapterText.split(/\s+/).length}
+             />
+          </div>
+        </div>
+      ) : (
+        <ReactReader 
+          // @ts-ignore - ReactReader types expect string, but epub.js supports ArrayBuffer
+          url={bookData} 
         title="My Book" 
         location={location} 
         locationChanged={onLocationChanged} 
@@ -285,7 +388,7 @@ export default function BookReaderPage() {
         }}
       /> 
       
-      {/* Back Button Overlay */} 
+      {/* Back Button Overlay - Always Visible */} 
       <button 
         onClick={() => router.back()} 
         className="absolute top-4 left-4 z-50 bg-white/80 dark:bg-slate-800/80 p-2 rounded-full shadow hover:bg-white dark:hover:bg-slate-800 transition-colors"
@@ -293,38 +396,44 @@ export default function BookReaderPage() {
         <span className="text-xl">⬅️</span>
       </button>
 
-      {/* Page Turn Buttons (Overlay) */}
-      <button 
-        className="absolute top-1/2 left-4 z-40 transform -translate-y-1/2 bg-white/50 dark:bg-black/30 hover:bg-white/80 dark:hover:bg-black/50 p-3 rounded-full transition-colors hidden md:block"
-        onClick={() => rendition?.prev()}
-      >
-        <span className="text-2xl">‹</span>
-      </button>
-      <button 
-        className="absolute top-1/2 right-4 z-40 transform -translate-y-1/2 bg-white/50 dark:bg-black/30 hover:bg-white/80 dark:hover:bg-black/50 p-3 rounded-full transition-colors hidden md:block"
-        onClick={() => rendition?.next()}
-      >
-        <span className="text-2xl">›</span>
-      </button>
+      {/* Page Turn Buttons (Overlay) - Only in Book Mode */}
+      {!isTextMode && (
+        <>
+          <button 
+            className="absolute top-1/2 left-4 z-40 transform -translate-y-1/2 bg-white/50 dark:bg-black/30 hover:bg-white/80 dark:hover:bg-black/50 p-3 rounded-full transition-colors hidden md:block"
+            onClick={() => rendition?.prev()}
+          >
+            <span className="text-2xl">‹</span>
+          </button>
+          <button 
+            className="absolute top-1/2 right-4 z-40 transform -translate-y-1/2 bg-white/50 dark:bg-black/30 hover:bg-white/80 dark:hover:bg-black/50 p-3 rounded-full transition-colors hidden md:block"
+            onClick={() => rendition?.next()}
+          >
+            <span className="text-2xl">›</span>
+          </button>
+        </>
+      )}
 
-      {/* Progress Control Bar (Bottom) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-4 transition-transform duration-300 transform translate-y-0">
-         <span className="text-xs text-slate-500 font-mono w-12 text-right">{currentProgress}%</span>
-         <input 
-           type="range" 
-           min="0" 
-           max="100" 
-           step="1"
-           value={currentProgress}
-           onChange={handlePageJump}
-           className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700 accent-emerald-600"
-         />
-         <span className="text-xs text-slate-500 font-mono w-12 text-left">100%</span>
-      </div>
+      {/* Progress Control Bar (Bottom) - Only in Book Mode */}
+      {!isTextMode && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-4 transition-transform duration-300 transform translate-y-0">
+           <span className="text-xs text-slate-500 font-mono w-12 text-right">{currentProgress}%</span>
+           <input 
+             type="range" 
+             min="0" 
+             max="100" 
+             step="1"
+             value={currentProgress}
+             onChange={handlePageJump}
+             className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700 accent-emerald-600"
+           />
+           <span className="text-xs text-slate-500 font-mono w-12 text-left">100%</span>
+        </div>
+      )}
 
       {/* --- Bottom Action Sheet --- */}
       <div 
-        className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transition-transform duration-300 z-50 rounded-t-2xl p-4 md:p-6 flex gap-4 items-center justify-center border-t border-slate-100 dark:border-slate-800 ${showActionSheet ? 'translate-y-0' : 'translate-y-full'}`}
+        className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transition-transform duration-300 z-50 rounded-t-2xl p-4 md:p-6 flex gap-4 items-center justify-center border-t border-slate-100 dark:border-slate-800 ${showActionSheet && !isTextMode ? 'translate-y-0' : 'translate-y-full'}`}
       >
         {selection && selection.split(' ').length < 3 ? (
           // Case A: Single Word (or short phrase) -> Show "Lookup"
