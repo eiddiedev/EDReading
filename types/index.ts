@@ -55,6 +55,7 @@ export interface VocabularyWord {
   reviewCount?: number; // Defaults to 0
   correctCount?: number; // Defaults to 0
   lastReviewed?: string; // ISO Date
+  tags?: string[];
 }
 
 export interface DictionaryResult {
