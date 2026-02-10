@@ -249,6 +249,7 @@ export default function BookReaderPage() {
           r.book.ready.then(() => {
             r.book.locations.generate(1000).then(() => {
               console.log("Locations generated");
+              // @ts-ignore - total exists at runtime but missing in types
               setTotalLocations(r.book.locations.total);
             });
           });

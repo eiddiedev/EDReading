@@ -32,7 +32,6 @@ export function EpubReader({ url, title, initialLocation, onLocationChange }: Ep
   const [isDictionaryLoading, setIsDictionaryLoading] = useState(false);
 
   const addVocabulary = useAppStore((state) => state.addVocabulary);
-  const theme = useAppStore((state) => state.theme); // 'light' | 'dark'
 
   const onLocationChanged = (loc: string | number) => {
     setLocation(loc);
