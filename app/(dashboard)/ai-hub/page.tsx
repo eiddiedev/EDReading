@@ -135,10 +135,12 @@ export default function AIHubPage() {
                 label: "继续",
                 onClick: executeRefresh,
             },
-            cancel: {
-                label: "取消",
-                onClick: () => {}, // No-op to close toast
-            },
+            // 👇 在这里加个记号，强制让 Git 发现文件变了！
+// fix: 修复 Zeabur 部署报错
+cancel: {
+  label: "取消",
+  onClick: () => {} // 👈 这一行是关键！必须加！
+}
         });
         return;
     }
