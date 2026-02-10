@@ -40,6 +40,7 @@ export default function BookReaderPage() {
   
   const addVocabulary = useAppStore((state) => state.addVocabulary);
   const selectedWordRef = useRef<string | null>(null);
+  const isSelectingRef = useRef(false);
 
   useEffect(() => {
     const loadBook = async () => {
@@ -256,6 +257,7 @@ export default function BookReaderPage() {
 
           // B. Listen for Text Selection
           r.on('selected', (cfiRange: string, contents: any) => {
+            isSelectingRef.current = true;
             // Extract the actual text string from the range
             // Note: r.getRange(cfiRange) returns a Range object
             const range = r.getRange(cfiRange);
@@ -266,10 +268,15 @@ export default function BookReaderPage() {
               setShowActionSheet(true);
               // Important: Don't auto-clear selection so user can see what they highlighted
             }
+            // Reset selection lock after a short delay
+            setTimeout(() => {
+              isSelectingRef.current = false;
+            }, 500);
           });
 
           // C. Listen for Click (to dismiss selection/sheet)
           r.on('click', () => {
+            if (isSelectingRef.current) return;
             setShowActionSheet(false);
             setSelection(null);
             // Optional: clear highlights if any
