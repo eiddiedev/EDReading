@@ -182,8 +182,11 @@ cancel: {
           }
         }
       },
+      // 找到第 185 行左右的 cancel
       cancel: {
-        label: "Cancel"
+        label: "Cancel",    // 确认这里是英文的 "Cancel"
+        onClick: () => {}  // 必须加上这一行！
+      }
       }
     });
   };
