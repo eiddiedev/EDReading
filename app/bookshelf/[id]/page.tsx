@@ -387,6 +387,7 @@ export default function BookReaderPage() {
           });
         }}
       /> 
+      )} 
       
       {/* Back Button Overlay - Always Visible */} 
       <button 
