@@ -152,23 +152,32 @@ export function ImmersiveReader({
 
   // Handle text selection (New Feature)
   const handleSelection = () => {
+    // 1. Get Selection
     const selection = window.getSelection();
-    if (selection && selection.toString().trim()) {
-      const text = selection.toString().trim();
-      // Don't trigger if it's just a click (handled by handleWordClick)
-      // But we can't easily distinguish click vs select here efficiently without delay.
-      // However, handleWordClick fires on onClick, this fires on onMouseUp.
-      // If we select text, we want the sheet.
-      
-      // Basic heuristic: if it's the same as clicked word, maybe ignore? 
-      // But user might want to analyze "word" as a selection (for context).
-      
-      setSelectedText(text);
-      setIsSheetOpen(true);
-      setAnalysisResult(null); // Reset previous analysis
-      setIsAnalyzing(false);
+    if (!selection || selection.isCollapsed) return;
+
+    const text = selection.toString().trim();
+    if (text.length > 0) {
+       setSelectedText(text);
+       setIsSheetOpen(true);
+       setAnalysisResult(null); 
+       setIsAnalyzing(false);
     }
   };
+
+  // Add event listener for selectionchange to handle mobile selection handles better
+  useEffect(() => {
+    const onSelectionChange = () => {
+      // Debounce or wait for selection to settle?
+      // On mobile, selection changes as user drags handles.
+      // We might want to wait until they stop? 
+      // Actually, 'selectionchange' fires continuously.
+      // 'touchend' on the container is already handled below.
+    };
+    
+    // document.addEventListener('selectionchange', onSelectionChange);
+    // return () => document.removeEventListener('selectionchange', onSelectionChange);
+  }, []);
 
   const handleAnalyzeSelection = async () => {
     if (!selectedText) return;
@@ -386,7 +395,11 @@ export function ImmersiveReader({
           lineHeight: '1.8'
         }}
         onMouseUp={handleSelection}
-        onTouchEnd={handleSelection}
+        onTouchEnd={(e) => {
+           // On mobile, touchend fires before selection is fully finalized by the OS in some cases.
+           // We add a small delay to let the OS selection update.
+           setTimeout(handleSelection, 100);
+        }}
       >
         <div 
           className="text-slate-800 dark:text-slate-200 text-lg md:text-xl tracking-wide whitespace-pre-wrap"
