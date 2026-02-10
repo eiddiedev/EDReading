@@ -227,6 +227,7 @@ export default function BookReaderPage() {
           // flow: 'scrolled', // Removed to enable pagination (Flip mode)
           manager: 'default',
           // CRITICAL: Disable worker to prevent 404/CORS issues with workers
+          // @ts-ignore
           worker: false 
         }}
         getRendition={(r) => {
