@@ -88,7 +88,8 @@ export default function BookshelfPage() {
       let coverBase64 = undefined;
 
       try {
-        const book = ePub(file);
+        const buffer = await file.arrayBuffer();
+        const book = ePub(buffer);
         const metadata = await book.loaded.metadata;
         title = metadata.title || title;
         author = metadata.creator || author;
