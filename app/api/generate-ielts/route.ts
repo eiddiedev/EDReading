@@ -109,54 +109,78 @@ Despite these challenges, investment in the sector continues to grow. Innovation
       // Analyze 2-3 complex sentences. STRUCTURE ANALYSIS MUST BE IN SIMPLIFIED CHINESE.
     }`;
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Generate a new IELTS reading passage." },
-        ],
-        temperature: 1.2,
-        response_format: { type: "json_object" },
-      }),
-    });
+    const controller = new AbortController();
+    // 90s timeout for long content generation
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return NextResponse.json(
-        { error: `AI API Error: ${response.status} - ${errorText}` },
-        { status: 500 }
-      );
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    
     try {
-      const result = JSON.parse(content);
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: "Generate a new IELTS reading passage." },
+          ],
+          temperature: 1.2,
+          response_format: { type: "json_object" },
+        }),
+        signal: controller.signal,
+      });
       
-      // Enhance result with server-side determined fields
-      const finalResult = {
-        ...result,
-        title: result.title, // Keep English as main title
-        title_zh: result.title_zh, // Keep Chinese as subtitle
-        topic: selectedTopic,
-        // Ensure tags exist
-        tags: result.tags || [selectedTopic.split(' ')[0], "Academic"]
-      };
+      clearTimeout(timeoutId);
 
-      return NextResponse.json(finalResult);
-    } catch (e) {
-      console.error("Failed to parse AI response:", content);
-      return NextResponse.json(
-        { error: "Failed to parse AI response" },
-        { status: 500 }
-      );
+      if (!response.ok) {
+        const errorText = await response.text();
+        // Handle 504 specifically
+        if (response.status === 504) {
+             throw new Error("AI Service Timed Out");
+        }
+        return NextResponse.json(
+          { error: `AI API Error: ${response.status} - ${errorText}` },
+          { status: 500 }
+        );
+      }
+
+      const data = await response.json();
+      let content = data.choices[0].message.content;
+      
+      // Clean up markdown code blocks if present
+      content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+      
+      try {
+        const result = JSON.parse(content);
+        
+        // Enhance result with server-side determined fields
+        const finalResult = {
+          ...result,
+          title: result.title, // Keep English as main title
+          title_zh: result.title_zh, // Keep Chinese as subtitle
+          topic: selectedTopic,
+          // Ensure tags exist
+          tags: result.tags || [selectedTopic.split(' ')[0], "Academic"]
+        };
+
+        return NextResponse.json(finalResult);
+      } catch (e) {
+        console.error("Failed to parse AI response:", content);
+        return NextResponse.json(
+          { error: "Failed to parse AI response" },
+          { status: 500 }
+        );
+      }
+
+    } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+            console.error("AI Request Timed Out (Client Side 90s limit)");
+            return NextResponse.json({ error: "AI 生成超时 (90s)。请稍后再试或检查网络。" }, { status: 504 });
+        }
+        throw fetchError;
     }
 
   } catch (error) {

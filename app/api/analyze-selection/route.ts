@@ -76,28 +76,53 @@ Analyze the target word/phrase in the context of the provided sentence.
 
     console.log(`Calling AI API: ${baseUrl} (Model: ${model})`);
 
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    const controller = new AbortController();
+    // Increase timeout to 60 seconds for slow AI responses
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("AI API Error:", res.status, errText);
-      throw new Error(`AI API Error: ${res.statusText}`);
+    try {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("AI API Error:", res.status, errText);
+        // Handle 504 specifically from the upstream API
+        if (res.status === 504) {
+             throw new Error("AI Service Timed Out");
+        }
+        throw new Error(`AI API Error: ${res.statusText} (${res.status})`);
+      }
+
+      const data = await res.json();
+      let content = data.choices[0].message.content;
+
+      // Clean up markdown code blocks if present
+      content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+      
+      return NextResponse.json(JSON.parse(content));
+
+    } catch (fetchError: any) {
+       clearTimeout(timeoutId);
+       if (fetchError.name === 'AbortError') {
+          console.error("AI Request Timed Out (Client Side 60s limit)");
+          return NextResponse.json({ error: "AI 分析超时 (60s)。请稍后再试或检查网络。" }, { status: 504 });
+       }
+       throw fetchError;
     }
 
-    const data = await res.json();
-    const content = data.choices[0].message.content;
-    
-    return NextResponse.json(JSON.parse(content));
-
-  } catch (error) {
+  } catch (error: any) {
     console.error("Analyze Selection Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const errorMessage = error.message || "Internal Server Error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
