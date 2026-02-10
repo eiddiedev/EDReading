@@ -30,6 +30,8 @@ export function EpubReader({ url, title, initialLocation, onLocationChange }: Ep
   // Dictionary State
   const [dictionaryResult, setDictionaryResult] = useState<DictionaryResult | null>(null);
   const [isDictionaryLoading, setIsDictionaryLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isSelectingRef = useRef(false);
 
   const addVocabulary = useAppStore((state) => state.addVocabulary);
 
@@ -42,6 +44,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange }: Ep
     setRendition(rendition);
     
     rendition.on('selected', (cfiRange: string, contents: any) => {
+      isSelectingRef.current = true;
       rendition.getRange(cfiRange).then((range: Range) => {
         const text = range.toString().trim();
         if (text) {
@@ -52,10 +55,15 @@ export function EpubReader({ url, title, initialLocation, onLocationChange }: Ep
           // So we set selection, which triggers the Bar to slide up.
         }
       });
+      // Reset selection lock after a short delay
+      setTimeout(() => {
+        isSelectingRef.current = false;
+      }, 500);
     });
 
     // Clear selection when clicking elsewhere
     rendition.on('click', () => {
+      if (isSelectingRef.current) return;
       setSelection(null);
       setIsSheetOpen(false);
     });
@@ -66,6 +74,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange }: Ep
     
     setIsSheetOpen(true);
     setAnalysisResult(null);
+    setError(null);
     setIsAnalyzing(true);
     
     // Clear the selection in the book so the bar disappears? 
@@ -110,16 +119,24 @@ export function EpubReader({ url, title, initialLocation, onLocationChange }: Ep
         })
       });
 
-      if (!response.ok) throw new Error("Analysis failed");
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || "Analysis failed");
+      }
       const data = await response.json();
       
+      if (data.error) {
+         throw new Error(data.error);
+      }
+
       setAnalysisResult({
         type: type,
         data: data
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Analysis Error:", error);
+      setError(error.message || "分析失败，请稍后重试");
     } finally {
       setIsAnalyzing(false);
     }
@@ -195,6 +212,22 @@ export function EpubReader({ url, title, initialLocation, onLocationChange }: Ep
                      <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
                      <p className="text-slate-500 font-medium">Analyzing Selection...</p>
                   </div>
+                )}
+
+                {error && (
+                   <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center px-4 animate-in fade-in zoom-in duration-300">
+                      <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
+                         <X className="w-8 h-8" />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Analysis Failed</h3>
+                      <p className="text-slate-500 text-sm max-w-xs">{error}</p>
+                      <button 
+                        onClick={() => setIsSheetOpen(false)}
+                        className="mt-4 px-6 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        Close
+                      </button>
+                   </div>
                 )}
 
                 {analysisResult && (
