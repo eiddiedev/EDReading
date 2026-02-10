@@ -182,14 +182,11 @@ cancel: {
           }
         }
       },
-      // 找到第 185 行左右的 cancel
-      cancel: {
-        label: "Cancel",    // 确认这里是英文的 "Cancel"
-        onClick: () => {}  // 必须加上这一行！
-      }
-      }
-    });
-  };
+  cancel: {
+            label: "Cancel",
+            onClick: () => {}
+          }
+  }
 
   // Chat Logic
   const handleSendMessage = async () => {
