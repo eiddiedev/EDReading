@@ -22,9 +22,9 @@ export default function ReaderPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // 滑动返回相关状态
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const minSwipeDistance = 100;
+  const [touchStart, setTouchStart] = useState<{ x: number, y: number } | null>(null);
+  const [touchEnd, setTouchEnd] = useState<{ x: number, y: number } | null>(null);
+  const minSwipeDistance = 120; // 增加触发阈值，从100增加到120
 
   useEffect(() => {
     if (!articleId) {
@@ -93,20 +93,32 @@ export default function ReaderPage() {
   // 手势处理
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    setTouchStart({
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY
+    });
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    setTouchEnd({
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY
+    });
   };
 
   const onTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
+    
+    const xDistance = touchStart.x - touchEnd.x;
+    const yDistance = touchStart.y - touchEnd.y;
+    
+    // 判断是否为右滑 (向右滑动，xDistance 为负)
+    // 1. 距离必须足够长 (minSwipeDistance)
+    // 2. 必须是水平滑动主导 (水平距离 > 垂直距离 * 1.5)
+    const isRightSwipe = xDistance < -minSwipeDistance;
+    const isHorizontal = Math.abs(xDistance) > Math.abs(yDistance) * 1.5;
 
-    if (isRightSwipe) {
+    if (isRightSwipe && isHorizontal) {
       // 右滑返回
       router.back();
     }
