@@ -187,6 +187,7 @@ cancel: {
             onClick: () => {}
           }
   });
+  };
 
   // Chat Logic
   const handleSendMessage = async () => {

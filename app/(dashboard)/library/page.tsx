@@ -145,15 +145,15 @@ export default function LibraryPage() {
     if (isGenerating) return; // Prevent double trigger
     setIsGenerating(true);
     
-    // Batch Generation Loop
+    // Batch Generation (Parallel)
     const total = count;
     let successCount = 0;
 
-    for (let i = 0; i < total; i++) {
-      const toastId = isAuto 
-        ? undefined 
-        : toast.loading(`AI 正在生成第 ${i + 1}/${total} 篇文章...`);
+    const toastId = isAuto 
+      ? undefined 
+      : toast.loading(`AI 正在全力生成 ${total} 篇文章，请稍候...`);
 
+    const generateOne = async (index: number) => {
       try {
         const res = await fetch("/api/generate-ielts", {
           method: "POST",
@@ -172,12 +172,11 @@ export default function LibraryPage() {
            throw new Error(data.error);
         }
         
-        // Step 2: Analyze the generated content
-        // Optimization: Check if the API already returned the analysis (Merged 1-Step Process)
+        // Step 2: Analyze (Fast/Slow Path)
         let aiResult;
         
         if (data.vocabulary && Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
-          console.log("⚡ Fast Path: Using merged AI Analysis from Generation step");
+          // Fast Path
           aiResult = {
             phrases: data.phrases || [],
             vocabulary: data.vocabulary.map((v: any) => ({
@@ -189,7 +188,7 @@ export default function LibraryPage() {
             tags: data.tags || []
           };
         } else {
-          console.log("🐢 Slow Path: Falling back to separate Analysis step");
+          // Slow Path
           const analysis = await analyzeArticleWithAI(data.content);
           aiResult = {
             phrases: analysis.phrases,
@@ -203,13 +202,13 @@ export default function LibraryPage() {
           id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substr(2),
           title: data.title,
           title_zh: data.title_zh,
-          original_title: data.title, // Keep track of original english title
+          original_title: data.title, 
           content: data.content,
           difficulty: data.difficulty || "Advanced",
           wordCount: data.content.split(/\s+/).length,
           createdAt: new Date().toISOString(),
           topic: data.topic,
-          tags: data.tags || aiResult.tags, // Prefer API tags, fallback to Analysis tags
+          tags: data.tags || aiResult.tags, 
           phrases: aiResult.phrases,
           aiVocabulary: aiResult.vocabulary,
           aiSentences: aiResult.sentences,
@@ -218,21 +217,29 @@ export default function LibraryPage() {
         await addArticle(newArticle);
         successCount++;
         
-        if (!isAuto) {
-           toast.success(`第 ${i + 1}/${total} 篇生成成功！`, { id: toastId });
+        // Update Progress
+        if (!isAuto && toastId) {
+           toast.loading(`AI 正在生成... (${successCount}/${total} 完成)`, { id: toastId });
         }
 
       } catch (error) {
-        console.error(error);
-        if (!isAuto) toast.error(`第 ${i + 1} 篇生成失败`, { id: toastId });
-        // Don't stop the loop, try next one? Or stop? 
-        // Usually safer to continue so user gets at least some.
+        console.error(`Gen failed for #${index}`, error);
+        // Don't fail the whole batch
       }
-    }
+    };
+
+    // Execute in Parallel
+    const promises = Array.from({ length: total }).map((_, i) => generateOne(i));
+    await Promise.all(promises);
 
     setIsGenerating(false);
-    if (!isAuto && successCount > 0) {
-       toast.success(`批量生成完成！成功: ${successCount}/${total}`);
+    
+    if (!isAuto) {
+       if (successCount > 0) {
+         toast.success(`批量生成完成！成功: ${successCount}/${total}`, { id: toastId });
+       } else {
+         toast.error("生成失败，请重试", { id: toastId });
+       }
     }
   };
 
