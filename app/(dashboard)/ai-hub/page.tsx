@@ -137,6 +137,7 @@ export default function AIHubPage() {
             },
             cancel: {
                 label: "取消",
+                onClick: () => {}, // No-op to close toast
             },
         });
         return;
