@@ -97,7 +97,7 @@ export default function LibraryPage() {
         return;
       }
       const normalized = (data || []).map(
-        (item: Article & { created_at?: string; word_count?: number; is_read?: boolean; is_public?: boolean }) => ({
+        (item: any) => ({
           ...item,
           id: String(item.id),
           createdAt: item.createdAt || item.created_at || new Date().toISOString(),
