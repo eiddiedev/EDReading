@@ -49,7 +49,7 @@ const SOURCES = [
   { 
     name: "The Guardian", 
     url: "https://www.theguardian.com/world/rss", 
-    tag: "General �", 
+    tag: "General", 
     level: "CET-4/6/Postgrad" 
   },
   { 
@@ -75,7 +75,7 @@ const SOURCES = [
   { 
     name: "China Daily", 
     url: "http://www.chinadaily.com.cn/rss/china_rss.xml", 
-    tag: "Domestic 🇨�", 
+    tag: "Domestic", 
     level: "Basic/CET-4" 
   }
 ];
@@ -119,7 +119,7 @@ export async function GET() {
             date: item.pubDate,
             sourceName: source.name,
             difficulty: source.level,
-            tags: [source.tag],
+            tags: [source.name], // Use Source Name instead of Topic Tag
             reason: finalReason // English Description
           };
       });

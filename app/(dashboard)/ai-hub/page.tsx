@@ -41,8 +41,8 @@ export default function AIHubPage() {
 
   useEffect(() => {
     ensureDailyUsage();
-    const storedTime = localStorage.getItem("last_curation_time");
-    const storedRecs = localStorage.getItem("cached_recommendations");
+    const storedTime = localStorage.getItem("last_curation_time_v2");
+    const storedRecs = localStorage.getItem("cached_recommendations_v2");
     if (storedTime && storedRecs) {
       setLastUpdated(parseInt(storedTime));
       setRecommendations(JSON.parse(storedRecs));
@@ -232,8 +232,8 @@ export default function AIHubPage() {
       setRecommendations(data.items || []);
       const now = Date.now();
       setLastUpdated(now);
-      localStorage.setItem("cached_recommendations", JSON.stringify(data.items));
-      localStorage.setItem("last_curation_time", now.toString());
+      localStorage.setItem("cached_recommendations_v2", JSON.stringify(data.items));
+      localStorage.setItem("last_curation_time_v2", now.toString());
     } catch (e) {
       toast.error("获取外刊失败");
     } finally {
@@ -356,9 +356,9 @@ export default function AIHubPage() {
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {recommendations.map((item, i) => (
                             <div key={i} className="group bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex flex-col">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/60">
+                                <div className="flex items-start justify-between mb-3 gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/60 whitespace-nowrap">
                                             {item.difficulty || "General"}
                                         </span>
                                         {item.tags?.[0] && (
@@ -367,7 +367,7 @@ export default function AIHubPage() {
                                             </span>
                                         )}
                                     </div>
-                                    <span className="text-[11px] text-slate-400">
+                                    <span className="text-[11px] text-slate-400 whitespace-nowrap shrink-0">
                                         {item.date ? new Date(item.date).toLocaleDateString() : ""}
                                     </span>
                                 </div>
