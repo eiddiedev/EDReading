@@ -5,9 +5,6 @@ import vocabularyData from '@/lib/vocabulary-data.json';
 import type { VocabularyCategory, VocabularyDatabase } from '@/types';
 
 // --- 配置区域 ---
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // 1. 定义细分角度池 (Sub-topic Roulette)
 // 解决“千篇一律”的核心：每次生成都强制从这里随机选一个具体切入点
@@ -100,6 +97,10 @@ const pickMandatoryKeywords = (topicId: string, count = 10) => {
 };
 
 export async function POST(req: Request) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
   const apiKey = process.env.DEEPSEEK_API_KEY || process.env.AI_API_KEY;
   const baseUrl = process.env.AI_BASE_URL || "https://api.deepseek.com";
 
