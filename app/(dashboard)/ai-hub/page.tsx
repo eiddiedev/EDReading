@@ -391,6 +391,11 @@ export default function AIHubPage() {
                             暂无推荐内容
                         </div>
                     )}
+                    <div className="mt-8 pb-8 text-center">
+                        <p className="text-xs text-slate-400">
+                            本站仅提供英语学习外刊链接，不提供代理服务。请用户在遵守所在地区法律法规的前提下访问。
+                        </p>
+                    </div>
                 </div>
             )}
 

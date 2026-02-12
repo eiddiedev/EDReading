@@ -7,56 +7,76 @@ const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
 
 // The "All-Star" Source List
 const SOURCES = [
-  // --- 1. Guardian (User Favorites) ---
-  { 
-    name: "Guardian Football", 
-    url: "https://www.theguardian.com/football/rss", 
-    tag: "Sport ⚽", 
-    level: "Relax" 
-  },
-  { 
-    name: "Guardian Tech", 
-    url: "https://www.theguardian.com/technology/rss", 
-    tag: "AI & Tech 💻", 
-    level: "Band 7" 
-  },
-  { 
-    name: "Guardian Science", 
-    url: "https://www.theguardian.com/science/rss", 
-    tag: "Science 🧪", 
-    level: "Band 8" 
-  },
-
-  // --- 2. Premium Academic (The "Big 5") ---
+  // --- 1. High Level (IELTS/TOEFL/Postgrad High) ---
   { 
     name: "The Economist", 
     url: "https://www.economist.com/science-and-technology/rss.xml", 
-    tag: "Logic 🧠", 
-    level: "Band 9" 
+    tag: "Politics & Econ 🧠", 
+    level: "IELTS/TOEFL/Postgrad" 
+  },
+  { 
+    name: "The Atlantic", 
+    url: "https://www.theatlantic.com/feed/all/", 
+    tag: "Culture & Soc 🌍", 
+    level: "IELTS/TOEFL/Postgrad" 
   },
   { 
     name: "Nature", 
     url: "https://www.nature.com/nature.rss", 
     tag: "Academic 🧬", 
-    level: "Band 9+" 
+    level: "IELTS/TOEFL/Postgrad" 
   },
+  { 
+    name: "Scientific American", 
+    url: "http://rss.sciam.com/ScientificAmerican-Global", 
+    tag: "Science 🧪", 
+    level: "IELTS/TOEFL/Postgrad" 
+  },
+
+  // --- 2. Medium Level (CET-4/6/Postgrad Mid) ---
   { 
     name: "New Scientist", 
     url: "https://www.newscientist.com/feed/home/", 
-    tag: "Discovery 🚀", 
-    level: "Band 7.5" 
-  },
-  { 
-    name: "National Geographic", 
-    url: "http://feeds.nationalgeographic.com/ng/News/News_Main", 
-    tag: "Nature 🌿", 
-    level: "Band 7" 
+    tag: "Pop Science 🚀", 
+    level: "CET-4/6/Postgrad" 
   },
   { 
     name: "Time Magazine", 
     url: "https://time.com/feed/", 
-    tag: "World 🌍", 
-    level: "Band 7" 
+    tag: "World News 📰", 
+    level: "CET-4/6/Postgrad" 
+  },
+  { 
+    name: "The Guardian", 
+    url: "https://www.theguardian.com/world/rss", 
+    tag: "General �", 
+    level: "CET-4/6/Postgrad" 
+  },
+  { 
+    name: "CS Monitor", 
+    url: "https://rss.csmonitor.com/feeds/world", 
+    tag: "Neutral ⚖️", 
+    level: "CET-4/6/Postgrad" 
+  },
+
+  // --- 3. Basic Friendly (CET-4/Entry) ---
+  { 
+    name: "BBC Learning English", 
+    url: "https://feeds.bbci.co.uk/learningenglish/english/features/6-minute-english/rss", 
+    tag: "Learning 🎧", 
+    level: "Basic/CET-4" 
+  },
+  { 
+    name: "Breaking News English", 
+    url: "https://breakingnewsenglish.com/rss.xml", 
+    tag: "Graded News 📚", 
+    level: "Basic/CET-4" 
+  },
+  { 
+    name: "China Daily", 
+    url: "http://www.chinadaily.com.cn/rss/china_rss.xml", 
+    tag: "Domestic 🇨�", 
+    level: "Basic/CET-4" 
   }
 ];
 
@@ -79,8 +99,8 @@ export async function GET() {
     let mixedFeed: any[] = [];
     
     results.forEach(({ source, items }) => {
-      // Rule: Take Top 2 from EVERY source.
-      const limit = 2; 
+      // Rule: Take Top 2-3 from EVERY source.
+      const limit = 3; 
       
       const topItems = items.slice(0, limit).map((item: any) => {
           // Get clean description
