@@ -77,12 +77,38 @@ export default function AIHubPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  const getHash = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+    return hash.toString();
+  };
+
   const handleAnalyze = async () => {
-    if (!inputContent.trim()) return;
+    const trimmedInput = inputContent.trim();
+    if (!trimmedInput) return;
     if (wordCount > 3000) {
       toast.error("字数超过 3000，无法分析");
       return;
     }
+
+    // 1. Check Local Cache
+    const cacheKey = `ai_cache_${getHash(trimmedInput)}`;
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+        try {
+            setResult(JSON.parse(cachedData));
+            toast.success("已加载本地缓存结果 (无消耗)");
+            return;
+        } catch (e) {
+            console.error("Cache parse error", e);
+            localStorage.removeItem(cacheKey);
+        }
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -92,10 +118,75 @@ export default function AIHubPage() {
       if (!checkImportQuota()) return;
       setIsAnalyzing(true);
       setResult(null);
-      const aiResult = await analyzeArticleWithAI(inputContent.trim(), user.id, "IELTS");
+      
+      // Use Streaming API to avoid timeout
+      const response = await fetch("/api/ai-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: trimmedInput,
+          userId: user.id,
+          level: "IELTS"
+        })
+      });
+
+      if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Analysis failed");
+      }
+
+      const contentType = response.headers.get("content-type");
+      let aiResult;
+
+      if (contentType && contentType.includes("application/json")) {
+          // Handle Cached Result or simple JSON response
+          aiResult = await response.json();
+          toast.success("已加载缓存结果 (无消耗)");
+      } else {
+          // Handle Stream (SSE)
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          let done = false;
+          let accumulatedText = "";
+
+          while (!done) {
+            const { value, done: doneReading } = await reader?.read()!;
+            done = doneReading;
+            const chunkValue = decoder.decode(value, { stream: true });
+            
+            const lines = chunkValue.split('\n');
+            for (const line of lines) {
+                if (line.trim().startsWith('data: ')) {
+                    const dataStr = line.trim().slice(6);
+                    if (dataStr === '[DONE]') continue;
+                    try {
+                        const json = JSON.parse(dataStr);
+                        const content = json.choices[0]?.delta?.content || "";
+                        accumulatedText += content;
+                    } catch (e) {
+                        // ignore incomplete chunks
+                    }
+                }
+            }
+          }
+          try {
+            aiResult = JSON.parse(accumulatedText);
+          } catch (e) {
+            console.error("JSON Parse Error:", e, accumulatedText);
+            throw new Error("AI output incomplete");
+          }
+      }
+      
+      // 2. Save to Cache
+      localStorage.setItem(cacheKey, JSON.stringify(aiResult));
+      
       setResult(aiResult);
-    } catch (error) {
-      toast.error("分析失败，请稍后重试");
+    } catch (error: any) {
+      if (error.message && (error.message.includes("Rate limit") || error.message.includes("额度"))) {
+          toast.error(error.message);
+      } else {
+          toast.error("分析失败，请稍后重试");
+      }
     } finally {
       setIsAnalyzing(false);
     }

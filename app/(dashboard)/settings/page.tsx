@@ -96,7 +96,9 @@ export default function SettingsPage() {
       } else {
         // 3. If Cloud has data (or both empty) -> Download Cloud (Hydrate)
         if (vocabCount && vocabCount > 0) {
-            const { data: cloudVocab, error: fetchError } = await supabase.from('vocabulary').select('*');
+            const { data: cloudVocab, error: fetchError } = await supabase
+                .from('vocabulary')
+                .select('id, user_id, word, phonetic, definition, translation, example, review_count, correct_count, tags, created_at, next_review_at, last_reviewed_at, review_stage, mastery_level');
             if (fetchError) throw fetchError;
             
             if (cloudVocab) {

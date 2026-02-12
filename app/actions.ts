@@ -5,6 +5,8 @@ import type { AIProcessResult } from "@/lib/ai-processor";
 import vocabularyData from "@/lib/vocabulary-data.json";
 import type { VocabularyCategory, VocabularyDatabase } from "@/types";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit } from "@/lib/rate-limit";
+import crypto from "crypto";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,6 +75,35 @@ export async function analyzeArticleWithAI(
   topicId?: string
 ): Promise<AIProcessResult> {
   const slicedText = text.slice(0, 3500);
+  const normalizedText = truncateToWords(slicedText, 3500);
+
+  // ⚡ 0. 缓存策略 (Cache Reuse) - 必须在限流之前检查，避免浪费额度
+  const contentHash = crypto.createHash("sha256").update(normalizedText).digest("hex");
+  
+  // 检查数据库中是否已存在相同内容的已分析文章
+  const { data: cachedArticle } = await supabase
+    .from("articles")
+    .select("*")
+    .eq("content_hash", contentHash)
+    .not("aiVocabulary", "is", null) // 确保有分析结果
+    .limit(1)
+    .single();
+
+  if (cachedArticle) {
+      // 命中缓存！直接返回结果，不消耗额度
+      return {
+          id: cachedArticle.id,
+          title: cachedArticle.title,
+          title_zh: cachedArticle.title_zh,
+          content: cachedArticle.content,
+          level: cachedArticle.difficulty,
+          phrases: cachedArticle.phrases || [],
+          vocabulary: cachedArticle.aiVocabulary || [], // 映射回 AIProcessResult 格式
+          sentences: cachedArticle.aiSentences || [],
+          tags: cachedArticle.tags || [],
+      };
+  }
+
   // 🚨 1. 第一道防线：立刻检查敏感词
   // 如果这里通过不了，绝对不会调用 AI，也不会入库
   const safetyCheck = checkContentSafety(slicedText);
@@ -92,6 +123,12 @@ export async function analyzeArticleWithAI(
   }
   if (!userId) {
     throw new Error("User ID is missing");
+  }
+
+  // 🛡️ 2. 第二道防线：Rate Limiting (IP & Daily Quota)
+  const rateLimit = await checkRateLimit(userId, "analyze_article");
+  if (!rateLimit.allowed) {
+    throw new Error(rateLimit.reason || "Rate limit exceeded");
   }
 
   // ... 以下是正常的 AI 处理逻辑 ...
@@ -169,7 +206,7 @@ export async function analyzeArticleWithAI(
     contentStr = contentStr.replace(/```json/g, "").replace(/```/g, "").trim();
     
     const result = JSON.parse(contentStr);
-    const newArticleId = Date.now().toString();
+    const newArticleId = crypto.randomUUID();
 
     const baseTags = Array.isArray(result.tags) ? result.tags : [];
     const finalTags = wasTruncated ? ["⚠️内容超过3500词已截断", ...baseTags] : baseTags;
@@ -186,6 +223,10 @@ export async function analyzeArticleWithAI(
       word_count: contentWordCount,
       created_at: new Date().toISOString(),
       user_id: userId,
+      content_hash: contentHash, // 存储 Hash
+      aiVocabulary: result.vocabulary || [],
+      aiSentences: result.sentences || [],
+      phrases: result.phrases || [],
     }]);
 
     return {

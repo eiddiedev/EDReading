@@ -18,7 +18,7 @@ export async function GET() {
     const tenDaysAgoString = tenDaysAgo.toISOString();
     const { data: dbArticles, error } = await supabase
       .from("articles")
-      .select("*")
+      .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public")
       .eq("is_public", true)
       .gt("created_at", tenDaysAgoString)
       .order("created_at", { ascending: false })

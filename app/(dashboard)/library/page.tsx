@@ -88,7 +88,7 @@ export default function LibraryPage() {
     const loadUserArticles = async (userId: string) => {
       const { data, error } = await supabase
         .from("articles")
-        .select("*")
+        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read")
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
       if (!isActive) return;
