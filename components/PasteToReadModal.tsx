@@ -55,7 +55,7 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
       toast.error("今日导入额度已用完");
       return;
     }
-    if (!checkImportQuota()) {
+    if (!(await checkImportQuota())) {
       return;
     }
 

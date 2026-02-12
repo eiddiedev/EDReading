@@ -116,7 +116,7 @@ export default function AIHubPage() {
         toast.error("请先登录再分析");
         return;
       }
-      if (!checkImportQuota()) return;
+      if (!(await checkImportQuota())) return;
       setIsAnalyzing(true);
       setResult(null);
       
@@ -251,7 +251,7 @@ export default function AIHubPage() {
         return;
       }
 
-      if (!checkChatQuota()) return;
+      if (!(await checkChatQuota())) return;
       
       const userContent = inputMessage.trim();
       setInputMessage("");

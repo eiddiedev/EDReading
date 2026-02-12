@@ -20,9 +20,9 @@ export interface AuthSlice {
   ensureDeviceId: () => Promise<string | null>;
   ensureAdmin: () => Promise<boolean>;
   checkGenerateQuota: () => Promise<boolean>;
-  checkImportQuota: () => boolean;
-  checkChatQuota: () => boolean;
-  checkSentenceAnalysisQuota: () => boolean;
+  checkImportQuota: () => Promise<boolean>;
+  checkChatQuota: () => Promise<boolean>;
+  checkSentenceAnalysisQuota: () => Promise<boolean>;
 }
 
 export interface ReviewSlice {

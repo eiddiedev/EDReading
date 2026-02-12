@@ -216,7 +216,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
 
   const handleSentenceAnalyze = async () => {
     if (!selectedText) return;
-    if (!checkSentenceAnalysisQuota()) return;
+    if (!(await checkSentenceAnalysisQuota())) return;
 
     setIsSentenceAnalyzing(true);
     setAnalysisResult(null);

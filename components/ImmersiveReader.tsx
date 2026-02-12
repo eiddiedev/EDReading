@@ -372,7 +372,7 @@ export function ImmersiveReader({
       const isWord = !selectedText.includes(" ");
       const type = isWord ? "word" : "sentence";
 
-      if (!isWord && !checkSentenceAnalysisQuota()) {
+      if (!isWord && !(await checkSentenceAnalysisQuota())) {
         return;
       }
 
