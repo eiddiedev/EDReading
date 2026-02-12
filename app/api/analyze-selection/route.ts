@@ -2,11 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkContentSafety } from "@/lib/safety";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
 const isDeepSeek = !process.env.AI_API_KEY && !!process.env.DEEPSEEK_API_KEY;
 
@@ -14,6 +9,11 @@ const baseUrl = process.env.AI_BASE_URL || (isDeepSeek ? "https://api.deepseek.c
 const model = process.env.AI_MODEL || (isDeepSeek ? "deepseek-chat" : "gpt-3.5-turbo");
 
 export async function POST(request: Request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   try {
     const { selection, context, type = "word" } = await request.json();
 
