@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { DictionaryResult } from "@/types";
+import { triggerHaptic } from "@/lib/utils";
 
 interface WordCardModalProps {
   isOpen: boolean;
@@ -222,9 +223,12 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
             {/* Footer Actions */}
             <div className="p-4 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 flex gap-3">
               <button
-                onClick={handleDownload}
+                onClick={() => {
+                  triggerHaptic();
+                  handleDownload();
+                }}
                 disabled={isLoading}
-                className="flex-1 py-3 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="flex-1 py-3 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-95 duration-100 touch-manipulation disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
                 Save Card

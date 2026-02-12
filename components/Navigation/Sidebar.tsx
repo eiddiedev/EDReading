@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, BookMarked, Settings, Sparkles, Library, Compass } from "lucide-react";
-import { Logo } from "@/components/Logo";
+import Image from "next/image";
 import { motion } from "framer-motion";
 
 const MotionLink = motion(Link);
@@ -23,8 +23,16 @@ export function Sidebar() {
   return (
     <aside className="font-sans hidden md:flex md:flex-col md:w-64 md:fixed md:inset-y-0 md:bg-[#FDFBF7] dark:md:bg-slate-900 md:border-r md:border-slate-200 dark:md:border-slate-800">
       <div className="flex flex-col flex-1 pt-8 pb-4 overflow-y-auto">
-        <div className="flex items-center flex-shrink-0 px-4 mb-8">
-          <Logo className="w-full h-auto" />
+        <div className="flex items-center flex-shrink-0 px-4 mb-2">
+          <div className="relative w-full h-32">
+            <Image 
+              src="/logo.png" 
+              alt="EDReading Logo" 
+              fill
+              className="object-contain object-left"
+              priority
+            />
+          </div>
         </div>
         <nav className="flex-1 px-4 space-y-2">
           {tabs.map((tab) => {

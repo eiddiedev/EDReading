@@ -14,7 +14,7 @@ export default function BookReaderPage() {
   const [error, setError] = useState<string | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchEndRef = useRef<{ x: number; y: number } | null>(null);
-  const minSwipeDistance = 120;
+  const minSwipeDistance = 150; // 降低灵敏度
 
   useEffect(() => {
     const loadBook = async () => {
@@ -88,11 +88,23 @@ export default function BookReaderPage() {
       const touchStart = touchStartRef.current;
       const touchEnd = touchEndRef.current;
       if (!touchStart || !touchEnd) return;
+
+      // 1. 只有从屏幕左边缘开始的滑动才触发返回 (防止与文本选择冲突)
+      if (touchStart.x > 50) return;
+
+      // 2. 如果有文本选中，不触发返回
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) return;
+
       const xDistance = touchStart.x - touchEnd.x;
       const yDistance = touchStart.y - touchEnd.y;
-      const isDownSwipe = yDistance < -minSwipeDistance;
-      const isVertical = Math.abs(yDistance) > Math.abs(xDistance) * 1.5;
-      if (isDownSwipe && isVertical) {
+      
+      // Right Swipe (Start - End < -Distance) => End > Start + Distance => Left to Right
+      const isRightSwipe = xDistance < -minSwipeDistance;
+      const isHorizontal = Math.abs(xDistance) > Math.abs(yDistance) * 1.5;
+      
+      // 3. 仅允许从左向右滑动触发退出 (移除垂直滑动退出)
+      if (isRightSwipe && isHorizontal) {
         router.back();
       }
     };

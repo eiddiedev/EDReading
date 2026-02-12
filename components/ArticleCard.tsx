@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Article } from "@/types";
 import { BookOpen, Trash2, Check, GraduationCap, Plus } from "lucide-react";
+import { triggerHaptic } from "@/lib/utils";
 
 interface ArticleCardProps {
   article: Article;
@@ -19,7 +20,7 @@ const difficultyColors: Record<string, string> = {
   'CET-4': "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
   'CET-6': "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
   'PG-Entrance': "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400",
-  'IELTS': "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400",
+  'IELTS': "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400",
   'TOEFL': "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400",
   
   // 兼容旧数据
@@ -85,11 +86,11 @@ export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggle
         </button>
       )}
       <Link href={`/reader/${article.id}`} onClick={() => onRead && onRead(article.id)} className="block h-full">
-        <div className={`group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300 hover:border-indigo-300 dark:hover:border-indigo-700 cursor-pointer relative h-full flex flex-col ${article.isRead ? "opacity-60" : ""}`}>
+        <div className={`group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300 hover:border-teal-300 dark:hover:border-teal-700 cursor-pointer relative h-full flex flex-col ${article.isRead ? "opacity-60" : ""}`}>
           <div className="p-6 flex-1 flex flex-col">
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1 mr-4">
-              <h3 className="text-xl font-bold font-serif text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 leading-snug">
+              <h3 className="text-xl font-bold font-serif text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors line-clamp-2 leading-snug">
                 {displayTitleEn}
               </h3>
               {displayTitleZh && displayTitleZh !== displayTitleEn && (
@@ -106,15 +107,18 @@ export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggle
             </div>
             {article.isRead ? (
               <div 
-                onClick={handleToggleRead} 
-                className="flex items-center gap-1.5 text-xs font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2.5 py-1.5 rounded-lg flex-shrink-0 cursor-pointer hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors z-10"
+                onClick={(e) => {
+                  triggerHaptic();
+                  handleToggleRead(e);
+                }} 
+                className="flex items-center gap-1.5 text-xs font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2.5 py-1.5 rounded-lg flex-shrink-0 cursor-pointer hover:bg-green-200 dark:hover:bg-green-900/50 transition-transform active:scale-95 duration-100 touch-manipulation z-10"
                 title="点击标记为未读"
               >
                 <Check size={14} />
                 <span>已读</span>
               </div>
             ) : (
-              <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center flex-shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/20 transition-colors">
+              <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center flex-shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-teal-500 group-hover:bg-teal-50 dark:group-hover:bg-teal-900/20 transition-colors">
                 <BookOpen className="w-5 h-5" />
               </div>
             )}
@@ -150,7 +154,7 @@ export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggle
                   e.stopPropagation();
                   onAdd(article);
                 }}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-indigo-200 dark:border-indigo-500/40 bg-indigo-50/60 dark:bg-indigo-900/20 px-2.5 py-1.5 md:px-3 min-h-[30px] text-[11px] md:text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors whitespace-nowrap"
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-teal-200 dark:border-teal-500/40 bg-teal-50/60 dark:bg-teal-900/20 px-2.5 py-1.5 md:px-3 min-h-[30px] text-[11px] md:text-xs font-semibold text-teal-600 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors whitespace-nowrap"
               >
                 <Plus size={12} />
                 加入文库

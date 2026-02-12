@@ -9,6 +9,8 @@ import { DictionaryResult } from "@/types";
 import { lookupLocal } from "@/lib/local-dictionary";
 import { motion, AnimatePresence } from "framer-motion";
 
+import { triggerHaptic } from "@/lib/utils";
+
 interface EpubReaderProps {
   url: string | ArrayBuffer;
   title?: string;
@@ -413,8 +415,11 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
             </div>
 
             <button
-              onClick={handleConfirmLookup}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-colors shadow-sm"
+              onClick={() => {
+                triggerHaptic();
+                handleConfirmLookup();
+              }}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-transform active:scale-95 duration-100 touch-manipulation shadow-sm"
             >
               <Sparkles size={18} />
               AI 深度分析
@@ -456,8 +461,11 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
 
               {!analysisResult && !isSentenceAnalyzing && (
                 <button
-                  onClick={handleSentenceAnalyze}
-                  className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  onClick={() => {
+                    triggerHaptic();
+                    handleSentenceAnalyze();
+                  }}
+                  className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-transform active:scale-95 duration-100 touch-manipulation shadow-sm"
                 >
                   <Sparkles size={18} />
                   AI 深度分析

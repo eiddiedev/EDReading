@@ -13,6 +13,7 @@ import { motion } from "framer-motion";
 import { DonationSection } from "@/components/settings/DonationSection";
 import { APP_VERSION, APP_STAGE, ADMIN_EMAIL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 const CONTACT_EMAIL = ADMIN_EMAIL.replace("@", "#");
 
@@ -519,17 +520,22 @@ export default function SettingsPage() {
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-md">
-                    ED
+                  <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-md">
+                    <Image 
+                      src="/icon.png" 
+                      alt="EDReading Icon" 
+                      fill
+                      className="object-cover"
+                    />
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-800 dark:text-slate-100">EDReading</h3>
-                    <p className="text-xs font-mono text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full inline-block mt-1">{APP_VERSION} {APP_STAGE}</p>
+                    <p className="text-xs font-mono text-teal-500 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full inline-block mt-1">{APP_VERSION} {APP_STAGE}</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => toast.success("您使用的是最新版本！")}
-                  className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium hover:underline"
+                  className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium hover:underline"
                 >
                   检查更新
                 </button>
@@ -546,7 +552,7 @@ export default function SettingsPage() {
                     { icon: CheckCircle2, text: "云端同步 (Supabase)" },
                  ].map((feature, idx) => (
                     <div key={idx} className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <feature.icon className="w-3.5 h-3.5 text-indigo-500" />
+                      <feature.icon className="w-3.5 h-3.5 text-teal-500" />
                       {feature.text}
                     </div>
                  ))}

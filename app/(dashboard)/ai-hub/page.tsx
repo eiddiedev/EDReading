@@ -10,6 +10,38 @@ import { CuratedItem, AIProcessResult } from "@/lib/ai-processor";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+const difficultyColors: Record<string, string> = {
+  'CET-4': "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800",
+  'CET-6': "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800",
+  'PG-Entrance': "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800",
+  'IELTS': "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800",
+  'TOEFL': "bg-sky-50 text-sky-600 border-sky-200 dark:bg-sky-900/20 dark:text-sky-300 dark:border-sky-800",
+  'Beginner': "bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800",
+  'Intermediate': "bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-800",
+  'Advanced': "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
+  'General': "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+};
+
+const tagColorPalette = [
+  "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300",
+  "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300",
+  "bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-300",
+  "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-300",
+  "bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-300",
+  "bg-lime-50 text-lime-600 dark:bg-lime-900/20 dark:text-lime-300",
+  "bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-900/20 dark:text-fuchsia-300",
+];
+
+const getTagColor = (tag: string) => {
+  if (!tag) return "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200";
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % tagColorPalette.length;
+  return tagColorPalette[index];
+};
+
 export default function AIHubPage() {
   const [activeTab, setActiveTab] = useState<"import" | "discovery" | "chat">("discovery");
 
@@ -27,18 +59,20 @@ export default function AIHubPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const overLimitRef = useRef(false);
 
-  const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota, checkChatQuota, isAdmin } = useAppStore((state) => ({
+  const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota, checkChatQuota, checkFeedRefreshQuota, isAdmin } = useAppStore((state) => ({
     addArticle: state.addArticle,
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
     checkImportQuota: state.checkImportQuota,
     checkChatQuota: state.checkChatQuota,
+    checkFeedRefreshQuota: state.checkFeedRefreshQuota,
     isAdmin: state.isAdmin,
   }));
   const router = useRouter();
   const wordCount = inputContent.trim() ? inputContent.trim().split(/\s+/).length : 0;
   const remainingImport = Math.max(0, 20 - dailyUsage.import);
   const remainingChat = Math.max(0, 100 - dailyUsage.chat);
+  const remainingFeeds = Math.max(0, 5 - (dailyUsage.feedRefresh || 0));
 
   useEffect(() => {
     ensureDailyUsage();
@@ -226,6 +260,7 @@ export default function AIHubPage() {
   };
 
   const handleRefresh = async () => {
+    if (!(await checkFeedRefreshQuota())) return;
     setIsRefreshing(true);
     try {
       const res = await fetch("/api/feeds");
@@ -343,9 +378,19 @@ export default function AIHubPage() {
                                         更新于 {new Date(lastUpdated).toLocaleTimeString()}
                                     </div>
                                 )}
-                                <button onClick={handleRefresh} disabled={isRefreshing} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
-                                    <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-400 font-mono hidden md:inline-block">
+                                        {isAdmin ? "∞" : remainingFeeds}/5
+                                    </span>
+                                    <button 
+                                        onClick={handleRefresh} 
+                                        disabled={isRefreshing || (!isAdmin && remainingFeeds <= 0)} 
+                                        className={`p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors ${(!isAdmin && remainingFeeds <= 0) ? "opacity-50 cursor-not-allowed" : ""}`}
+                                        title={`刷新外刊列表 (今日剩余 ${isAdmin ? "无限" : remainingFeeds} 次)`}
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div className="flex flex-col items-start md:items-end gap-2">
@@ -367,11 +412,11 @@ export default function AIHubPage() {
                             <div key={i} className="group bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex flex-col">
                                 <div className="flex items-start justify-between mb-3 gap-2">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/60 whitespace-nowrap">
+                                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${difficultyColors[item.difficulty || "General"] || difficultyColors["General"]}`}>
                                             {item.difficulty || "General"}
                                         </span>
                                         {item.tags?.[0] && (
-                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${getTagColor(item.tags[0])}`}>
                                                 {item.tags[0]}
                                             </span>
                                         )}

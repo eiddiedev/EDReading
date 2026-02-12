@@ -46,8 +46,8 @@ export function ReviewReminder() {
         const { count: due } = await supabase
           .from('vocabulary')
           .select('*', { count: 'exact', head: true })
-          .lte('next_review_at', nowISO)
-          .lt('review_stage', 100);
+          .lte('next_review_at', nowISO);
+          // Removed .lt('review_stage', 100) to ensure we don't miss items with null stage
         
         // Mastered Count
         const { count: mastered } = await supabase
@@ -118,6 +118,10 @@ export function ReviewReminder() {
               <div className="flex gap-4 text-sm mt-2 bg-black/10 p-2 rounded-lg backdrop-blur-sm"> 
                 <span className="text-emerald-100 font-medium">今日已复习: {todayReviewedCount}</span> 
                 <span className="text-amber-100 font-bold">今日待完成: {dueCount}</span> 
+              </div>
+              
+              <div className="text-[10px] text-white/70 mt-1.5 font-medium tracking-wide">
+                🧠 基于艾宾浩斯遗忘曲线 (Forgetting curve)
               </div>
             </div>
           </div>

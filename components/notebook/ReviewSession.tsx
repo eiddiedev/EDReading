@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { VocabularyWord } from "@/types";
 import { useAppStore } from "@/lib/store";
+import { triggerHaptic } from "@/lib/utils";
 import { X, Check, Volume2, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -37,8 +38,8 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
     return null; 
   }
 
-  const handleMaster = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card flip if needed
+  const handleMaster = (e?: React.MouseEvent) => {
+    e?.stopPropagation(); // Prevent card flip if needed
     markAsMastered(currentWord.id);
     toast.success("已标记为熟练，不再复习");
     
@@ -201,8 +202,11 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
                 </div>
                 
                 <button
-                  onClick={handleMaster}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-xs font-bold transition-colors"
+                  onClick={(e) => {
+                    triggerHaptic();
+                    handleMaster(e);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-xs font-bold transition-transform active:scale-95 duration-100 touch-manipulation"
                   title="标记为熟练（不再复习）"
                 >
                   <Trophy size={14} />
@@ -273,9 +277,12 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
 
               {/* Action Button */}
               <button
-                onClick={() => handleSubmit()}
+                onClick={() => {
+                  triggerHaptic();
+                  handleSubmit();
+                }}
                 disabled={status === "correct" || (status === "wrong" && userAnswer.trim().toLowerCase() !== currentWord.word.toLowerCase())}
-                className={`w-full mt-8 py-4 rounded-xl font-bold text-lg transition-all ${
+                className={`w-full mt-8 py-4 rounded-xl font-bold text-lg transition-all active:scale-95 duration-100 touch-manipulation ${
                   status === "correct"
                     ? "bg-green-500 text-white shadow-lg shadow-green-200 dark:shadow-none scale-105"
                     : status === "wrong"

@@ -30,9 +30,18 @@ export function calculateNextReview(currentStage: number, isCorrect: boolean): S
     // Calculate next review date
     const daysToAdd = intervals[newStage];
     
-    // Handle fractional days (e.g. 0.5 days = 12 hours)
-    const timeToAdd = daysToAdd * 24 * 60 * 60 * 1000;
-    nextReviewDate = new Date(nextReviewDate.getTime() + timeToAdd);
+    // Special Logic: "Overnight Reset"
+    // If interval is 1 day (Stage 2), set to tomorrow 4:00 AM
+    if (daysToAdd === 1) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(4, 0, 0, 0);
+      nextReviewDate = tomorrow;
+    } else {
+      // Standard interval calculation
+      const timeToAdd = daysToAdd * 24 * 60 * 60 * 1000;
+      nextReviewDate = new Date(nextReviewDate.getTime() + timeToAdd);
+    }
     
   } else {
     // Incorrect: Reset to 0 or penalty

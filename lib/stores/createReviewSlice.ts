@@ -193,7 +193,7 @@ export const createReviewSlice: StateCreator<AppState, [], [], ReviewSlice> = (s
       .from('vocabulary')
       .select('*')
       .lte('next_review_at', now)
-      .lt('review_stage', 100) // Exclude mastered items just in case
+      // removed .lt('review_stage', 100) to prevent filtering out nulls
       .order('next_review_at', { ascending: true });
 
     if (error) {

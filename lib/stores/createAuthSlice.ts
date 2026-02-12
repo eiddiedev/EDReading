@@ -13,6 +13,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     import: 0,
     chat: 0,
     sentenceAnalysisCount: 0,
+    feedRefresh: 0,
   });
 
   let resetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -57,7 +58,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
   };
 
   const checkAndIncrement = async (
-    type: "generate" | "import" | "chat" | "sentenceAnalysisCount",
+    type: "generate" | "import" | "chat" | "sentenceAnalysisCount" | "feedRefresh",
     limit: number,
     message: string
   ) => {
@@ -73,11 +74,12 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
 
     ensureDailyUsage();
     const current = get().dailyUsage;
-    if (current[type] >= limit) {
+    const currentCount = current[type] || 0;
+    if (currentCount >= limit) {
       toast.error(message);
       return false;
     }
-    set({ dailyUsage: { ...current, [type]: current[type] + 1 } });
+    set({ dailyUsage: { ...current, [type]: currentCount + 1 } });
     return true;
   };
 
@@ -250,5 +252,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
         50,
         "今日 50 句精读分析配额已用完，请优先精读已分析的内容。"
       ),
+    checkFeedRefreshQuota: () =>
+      checkAndIncrement("feedRefresh", 5, "今日刷新次数已达上限 (5次)"),
   };
 };

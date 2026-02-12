@@ -13,7 +13,7 @@ export interface AuthSlice {
   setUser: (user: User | null) => void;
   clearUser: () => void;
   logout: () => Promise<void>;
-  dailyUsage: { date: string; generate: number; import: number; chat: number; sentenceAnalysisCount: number };
+  dailyUsage: { date: string; generate: number; import: number; chat: number; sentenceAnalysisCount: number; feedRefresh: number };
   deviceId: string | null;
   isAdmin: boolean;
   ensureDailyUsage: () => void;
@@ -23,6 +23,7 @@ export interface AuthSlice {
   checkImportQuota: () => Promise<boolean>;
   checkChatQuota: () => Promise<boolean>;
   checkSentenceAnalysisQuota: () => Promise<boolean>;
+  checkFeedRefreshQuota: () => Promise<boolean>;
 }
 
 export interface ReviewSlice {

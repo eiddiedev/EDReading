@@ -25,6 +25,8 @@ interface ImmersiveReaderProps {
   difficulty?: string;
 }
 
+import { triggerHaptic } from "@/lib/utils";
+
 export function ImmersiveReader({ 
   title, 
   title_zh, 
@@ -673,8 +675,11 @@ export function ImmersiveReader({
 
               {!analysisResult && !isAnalyzing && (
                 <button
-                  onClick={handleAnalyzeSelection}
-                  className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  onClick={() => {
+                    triggerHaptic();
+                    handleAnalyzeSelection();
+                  }}
+                  className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-transform active:scale-95 duration-100 touch-manipulation shadow-sm"
                 >
                   <Sparkles size={18} />
                   Analyze This

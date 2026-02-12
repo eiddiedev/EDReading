@@ -10,6 +10,7 @@ import { TopicSelectionModal, IELTS_TOPICS } from "@/components/TopicSelectionMo
 import { Sparkles, Plus, Loader2, RefreshCw } from "lucide-react";
 import { Article } from "@/types";
 import { toast } from "sonner";
+import { triggerHaptic } from "@/lib/utils";
 
 export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState<"mine" | "discover">("mine");
@@ -362,16 +363,22 @@ export default function LibraryPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setIsTopicModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 min-h-[40px] rounded-full bg-indigo-600 text-white text-sm md:text-base font-medium hover:bg-indigo-700 transition-colors whitespace-nowrap"
+            onClick={() => {
+              triggerHaptic();
+              setIsTopicModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 min-h-[40px] rounded-full bg-indigo-600 text-white text-sm md:text-base font-medium hover:bg-indigo-700 transition-transform active:scale-95 duration-100 touch-manipulation whitespace-nowrap"
           >
             <Sparkles className="w-4 h-4" />
             AI 生成
           </button>
           <button
             type="button"
-            onClick={() => setIsPasteModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 min-h-[40px] rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm md:text-base font-medium border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
+            onClick={() => {
+              triggerHaptic();
+              setIsPasteModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 min-h-[40px] rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm md:text-base font-medium border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-transform active:scale-95 duration-100 touch-manipulation whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             导入文章
@@ -390,7 +397,7 @@ export default function LibraryPage() {
             onClick={() => setActiveTab(tab.id as "mine" | "discover")}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
               activeTab === tab.id
-                ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm"
+                ? "bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
             }`}
           >

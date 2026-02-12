@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   description: "A Shanbay-inspired English learning app for IELTS reading practice",
   manifest: "/manifest.json",
   themeColor: "#0d9488",
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export default function RootLayout({
