@@ -53,10 +53,11 @@ export function ImmersiveReader({
   
   const fontSize = useAppStore((state) => state.fontSize);
   const addVocabulary = useAppStore((state) => state.addVocabulary);
-  const { dailyUsage, ensureDailyUsage, checkSentenceAnalysisQuota } = useAppStore((state) => ({
+  const { dailyUsage, ensureDailyUsage, checkSentenceAnalysisQuota, isAdmin } = useAppStore((state) => ({
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
     checkSentenceAnalysisQuota: state.checkSentenceAnalysisQuota,
+    isAdmin: state.isAdmin,
   }));
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedWordRef = useRef<string | null>(null);
@@ -658,7 +659,7 @@ export function ImmersiveReader({
                     </p>
                     {isSentenceSelection && (
                       <div className="mt-2 text-xs text-slate-400">
-                        今日剩余配额：{remainingSentence}/50
+                        {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余配额：${remainingSentence}/50`}
                       </div>
                     )}
                  </div>

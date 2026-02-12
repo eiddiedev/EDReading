@@ -19,6 +19,20 @@ export async function POST(req: Request) {
     
     // 获取用户最新的一条消息
     const lastMessage = messages[messages.length - 1];
+
+    // 1.5 Rate Limiting & Admin Bypass (Need userId from header or body)
+    // Assuming userId is passed in body for now, or we skip if not present
+    const { userId } = body;
+    if (userId) {
+      const { checkRateLimit } = await import("@/lib/rate-limit");
+      const rateLimit = await checkRateLimit(userId, "ai_chat");
+      if (!rateLimit.allowed) {
+         return NextResponse.json({ 
+          role: "assistant", 
+          content: rateLimit.reason || "今日对话额度已用完，请明天再来。" 
+        });
+      }
+    }
     
     // 2. 🛡️ 安全拦截 (合规性检查)
     const safety = checkContentSafety(lastMessage?.content || "");

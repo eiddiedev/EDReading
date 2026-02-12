@@ -24,11 +24,12 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
     { value: "Intermediate" as const, label: "中级" },
     { value: "Advanced" as const, label: "高级" },
   ];
-  const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota } = useAppStore((state) => ({
+  const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota, isAdmin } = useAppStore((state) => ({
     addArticle: state.addArticle,
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
     checkImportQuota: state.checkImportQuota,
+    isAdmin: state.isAdmin,
   }));
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const remainingImport = Math.max(0, 20 - dailyUsage.import);
@@ -50,7 +51,7 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
       toast.error("内容超过 3000 词，已禁止导入");
       return;
     }
-    if (remainingImport <= 0) {
+    if (!isAdmin && remainingImport <= 0) {
       toast.error("今日导入额度已用完");
       return;
     }
@@ -72,7 +73,7 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
         Intermediate: "IELTS",
         Advanced: "TOEFL",
       };
-      const aiResult = await analyzeArticleWithAI(content.trim(), user.id, levelMap[difficulty]);
+      const aiResult = await analyzeArticleWithAI(content.trim(), user.id, levelMap[difficulty], undefined, title.trim());
 
       const wordCount = content.split(/\s+/).length;
       const newArticle: Article = {
@@ -188,8 +189,8 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isAnalyzing || wordCount > 3000 || remainingImport <= 0}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 ${isAnalyzing || wordCount > 3000 || remainingImport <= 0 ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}
+              disabled={isAnalyzing || wordCount > 3000 || (!isAdmin && remainingImport <= 0)}
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 ${isAnalyzing || wordCount > 3000 || (!isAdmin && remainingImport <= 0) ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}
             >
               {isAnalyzing ? (
                 <>
@@ -202,7 +203,7 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
             </button>
           </div>
           <div className="text-xs text-slate-400">
-            今日剩余导入额度：{remainingImport} 篇
+            {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余导入额度：${remainingImport} 篇`}
           </div>
         </div>
       </div>

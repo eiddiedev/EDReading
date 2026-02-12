@@ -39,7 +39,16 @@ export default function LibraryPage() {
   }));
 
   const sortedMyArticles = useMemo(
-    () => [...articles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    () => [...articles].sort((a, b) => {
+      // 1. Unread first, Read last
+      const aRead = a.isRead || false;
+      const bRead = b.isRead || false;
+      if (aRead !== bRead) {
+        return aRead ? 1 : -1; // If a is read (true) and b is not (false), a > b, so a goes after b
+      }
+      // 2. Sort by Date Descending
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }),
     [articles]
   );
 
@@ -88,7 +97,7 @@ export default function LibraryPage() {
     const loadUserArticles = async (userId: string) => {
       const { data, error } = await supabase
         .from("articles")
-        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read")
+        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read, content")
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
       if (!isActive) return;
@@ -283,9 +292,33 @@ export default function LibraryPage() {
       if (notify) toast.message("已在文库中");
       return;
     }
+
+    // Ensure content is available before adding
+    let content = article.content;
+    let wordCount = article.wordCount;
+
+    if (!content) {
+        try {
+            const { data, error } = await supabase
+                .from("articles")
+                .select("content, word_count")
+                .eq("id", article.id)
+                .single();
+            
+            if (!error && data) {
+                content = data.content;
+                wordCount = data.word_count || wordCount;
+            }
+        } catch (e) {
+            console.error("Failed to fetch content for public article:", e);
+        }
+    }
+
     const localArticle: Article = {
       ...article,
       id: localId,
+      content: content || "", // Fallback to empty string if still missing
+      wordCount: wordCount || 0,
       createdAt: new Date().toISOString(),
       is_public: false,
       is_local_only: true,
@@ -400,7 +433,6 @@ export default function LibraryPage() {
                 <ArticleCard
                   key={article.id}
                   article={article}
-                  onRead={() => handlePublicAdd(article, false)}
                   onAdd={handlePublicAdd}
                   onAdminDelete={isAdmin ? handleAdminDeletePublic : undefined}
                 />

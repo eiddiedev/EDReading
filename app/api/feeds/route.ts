@@ -47,6 +47,12 @@ const SOURCES = [
     level: "CET-4/6/Postgrad" 
   },
   { 
+    name: "The Guardian Football", 
+    url: "https://www.theguardian.com/football/rss", 
+    tag: "Football ⚽", 
+    level: "CET-4/6/Postgrad" 
+  },
+  { 
     name: "The Guardian", 
     url: "https://www.theguardian.com/world/rss", 
     tag: "General", 
@@ -100,7 +106,11 @@ export async function GET() {
     
     results.forEach(({ source, items }) => {
       // Rule: Take Top 2-3 from EVERY source.
-      const limit = 3; 
+      // Special Rule for Guardian Football: Only 1 article per day
+      let limit = 3; 
+      if (source.name === "The Guardian Football") {
+        limit = 1;
+      }
       
       const topItems = items.slice(0, limit).map((item: any) => {
           // Get clean description

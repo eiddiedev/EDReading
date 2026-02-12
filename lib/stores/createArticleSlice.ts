@@ -20,20 +20,30 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
     }
 
     try {
-      const res = await fetch("/api/community");
-      if (res.ok) {
-        const data = await res.json();
-        const normalizedItems = (data.items || []).map(
-          (item: Article & { created_at?: string; word_count?: number }) => ({
-            ...item,
-            id: String(item.id),
-            createdAt: item.createdAt || item.created_at || new Date().toISOString(),
-            wordCount: item.wordCount ?? item.word_count ?? (item.content ? item.content.split(/\s+/).length : 0),
-          })
-        );
-        set({ publicArticles: normalizedItems, lastPublicFetch: now });
-      }
+      // Direct Supabase query instead of API to ensure fields
+      const { data, error } = await supabase
+        .from("articles")
+        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read, content") // Fetch content for word count check, or use summary if available
+        .eq("is_public", true)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      const normalizedItems = (data || []).map(
+        (item: any) => ({
+          ...item,
+          id: String(item.id),
+          createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+          wordCount: item.wordCount ?? item.word_count ?? (item.content ? item.content.split(/\s+/).length : 0),
+          // We can optionally clear content here to save memory if we don't want to store full content in public list
+          // But user wants "Add to Library" to work, which needs content. 
+          // Storing 50 articles' content in memory is acceptable for text.
+        })
+      );
+      set({ publicArticles: normalizedItems, lastPublicFetch: now });
     } catch (e) {
+      console.error("Fetch public articles failed:", e);
       toast.error("发现内容加载失败");
     }
   },
@@ -165,16 +175,26 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
   },
 
   removeArticle: async (id) => {
-    const baseId = id.startsWith("local-") ? id.slice(6) : id;
+    const isLocalClone = id.startsWith("local-");
+    const baseId = isLocalClone ? id.slice(6) : id;
+    
+    // Find the article to determine if it's public
+    // If it's public, we NEVER delete from cloud in this function (only remove from library)
+    const article = get().articles.find(a => a.id === id || a.id === baseId || a.id === `local-${baseId}`);
+    const isPublic = article?.is_public || false;
 
     try {
       // 1. Cloud Delete
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { error } = await supabase.from("articles").delete().eq("id", baseId);
-        if (error) {
-          console.error("云端删除失败:", error);
-          throw error;
+      // Only delete from cloud if it's NOT a local clone AND NOT a public article
+      // "My Library" delete should strictly be "Remove from Library" for public items
+      if (!isLocalClone && !isPublic) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { error } = await supabase.from("articles").delete().eq("id", baseId);
+          if (error) {
+            console.error("云端删除失败:", error);
+            throw error;
+          }
         }
       }
 
@@ -182,7 +202,8 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
       // Must immediately update local state to prevent "Zombie Articles"
       set((state) => ({
         articles: state.articles.filter((a) => a.id !== id && a.id !== baseId && a.id !== `local-${baseId}`),
-        publicArticles: state.publicArticles.filter((a) => a.id !== id && a.id !== baseId),
+        // Fix: Do NOT remove from publicArticles when deleting from My Library
+        // publicArticles: state.publicArticles.filter((a) => a.id !== id && a.id !== baseId),
       }));
 
       // 3. Disk/IndexedDB Delete

@@ -33,9 +33,10 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
   const [level, setLevel] = useState("IELTS");
   const [count, setCount] = useState(1);
   const [selectedTopicId, setSelectedTopicId] = useState(IELTS_TOPICS[0].id);
-  const { dailyUsage, ensureDailyUsage } = useAppStore((state) => ({
+  const { dailyUsage, ensureDailyUsage, isAdmin } = useAppStore((state) => ({
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
+    isAdmin: state.isAdmin,
   }));
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
 
   const selectedTopic = IELTS_TOPICS.find((topic) => topic.id === selectedTopicId) || IELTS_TOPICS[0];
   const remainingGenerate = Math.max(0, 5 - dailyUsage.generate);
-  const isQuotaExhausted = remainingGenerate <= 0;
+  const isQuotaExhausted = !isAdmin && remainingGenerate <= 0;
 
   return (
     <AnimatePresence>
@@ -60,24 +61,24 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
           className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-700"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-600" />
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
               定制你的阅读训练
             </h2>
             <button
               onClick={onClose}
               className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
 
-          <div className="p-6 space-y-6">
+          <div className="p-4 space-y-4">
             
             <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <GraduationCap className="w-4 h-4 text-indigo-500" />
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />
                 选择目标等级 (Target Level)
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -87,14 +88,14 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
                     key={opt.id}
                     onClick={() => setLevel(opt.id)}
                     className={`
-                      relative p-2.5 rounded-xl text-left border transition-all duration-200
+                      relative p-2 rounded-lg text-left border transition-all duration-200
                       ${level === opt.id 
                         ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none" 
                         : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800"
                       }
                     `}
                   >
-                    <div className="font-bold text-sm">{opt.label}</div>
+                    <div className="font-bold text-xs">{opt.label}</div>
                     <div className={`text-[10px] mt-0.5 ${level === opt.id ? "text-indigo-100" : "text-slate-400"}`}>
                       {opt.desc}
                     </div>
@@ -104,21 +105,21 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-indigo-500" />
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                  <BarChart3 className="w-3.5 h-3.5 text-indigo-500" />
                   生成数量 (Batch Size)
                 </label>
                 <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
                   AI 生成耗时约 {count * 20} 秒
                 </span>
               </div>
-              <div className="flex bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg">
+              <div className="flex bg-slate-100 dark:bg-slate-800/50 p-0.5 rounded-lg">
                 {[1, 2, 3].map((num) => (
                   <button
                     key={num}
                     onClick={() => setCount(num)}
-                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
                       count === num
                         ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-black/5"
                         : "text-slate-500 dark:text-slate-400 hover:text-slate-700"
@@ -131,23 +132,23 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
             </div>
 
             <div>
-               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-500" />
+               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                 选择话题 (Select Topic)
               </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
                 {IELTS_TOPICS.map((topic) => (
                   <button
                     type="button"
                     key={topic.id}
                     onClick={() => setSelectedTopicId(topic.id)}
-                    className={`group relative flex flex-col items-start p-3.5 rounded-xl border transition-all text-left ${
+                    className={`group relative flex flex-col items-start p-2.5 rounded-lg border transition-all text-left ${
                       selectedTopicId === topic.id
                         ? "border-indigo-500 bg-indigo-50/70 dark:bg-indigo-900/20"
                         : "border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10"
                     }`}
                   >
-                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">
+                    <span className="text-xs font-medium text-slate-900 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">
                       {topic.label}
                     </span>
                   </button>
@@ -159,7 +160,7 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
               type="button"
               onClick={() => onSelect(selectedTopic.prompt, selectedTopic.id, level, count)}
               disabled={isGenerating || isQuotaExhausted}
-              className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                 isGenerating || isQuotaExhausted
                   ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
                   : "bg-indigo-600 text-white hover:bg-indigo-700"
@@ -168,8 +169,11 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
               <Sparkles className="w-4 h-4" />
               {isQuotaExhausted ? "配额已耗尽，请明天再试" : "开始生成"}
             </button>
-            <p className="text-xs text-slate-400 mt-2">
-              今日剩余生成额度：{remainingGenerate} / 5 篇
+            <p className="text-[10px] text-slate-400 mt-1 text-center">
+              {isAdmin 
+                ? "管理员无限配额模式 🚀" 
+                : `今日剩余生成额度：${remainingGenerate} / 5 篇`
+              }
             </p>
 
           </div>

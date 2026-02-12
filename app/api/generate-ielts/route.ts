@@ -113,6 +113,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "未登录，无法生成公共文章。" }, { status: 401 });
     }
 
+    // 🛡️ Rate Limiting & Admin Bypass
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+    const rateLimit = await checkRateLimit(userId, "generate_ielts");
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ error: rateLimit.reason || "今日生成额度已用完" }, { status: 429 });
+    }
+
     const inputSafety = checkContentSafety(String(topicPrompt || ""));
     if (!inputSafety.isSafe) {
       return NextResponse.json({ error: "输入内容包含敏感信息，无法生成。" }, { status: 400 });

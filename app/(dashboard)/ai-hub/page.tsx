@@ -27,12 +27,13 @@ export default function AIHubPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const overLimitRef = useRef(false);
 
-  const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota, checkChatQuota } = useAppStore((state) => ({
+  const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota, checkChatQuota, isAdmin } = useAppStore((state) => ({
     addArticle: state.addArticle,
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
     checkImportQuota: state.checkImportQuota,
     checkChatQuota: state.checkChatQuota,
+    isAdmin: state.isAdmin,
   }));
   const router = useRouter();
   const wordCount = inputContent.trim() ? inputContent.trim().split(/\s+/).length : 0;
@@ -323,8 +324,11 @@ export default function AIHubPage() {
         <main className="flex-1 overflow-hidden relative">
             {activeTab === "discovery" && (
                 <div className="h-full overflow-y-auto p-6">
-                    <div className="flex flex-col gap-3 mb-6">
-                        <div className="flex items-center justify-between">
+                    <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
+                                <Sparkles className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                            </div>
                             <div>
                                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                                     <Globe className="w-4 h-4 text-indigo-600" />
@@ -344,13 +348,18 @@ export default function AIHubPage() {
                                 </button>
                             </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            <span className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                共 {recommendations.length} 篇
-                            </span>
-                            <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/60">
-                                每日更新
-                            </span>
+                        <div className="flex flex-col items-start md:items-end gap-2">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                <span className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                    共 {recommendations.length} 篇
+                                </span>
+                                <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/60">
+                                    每日更新
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 md:text-right">
+                                本站仅提供英语学习外刊链接，不提供代理服务。请用户在遵守所在地区法律法规的前提下访问。
+                            </p>
                         </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -391,11 +400,7 @@ export default function AIHubPage() {
                             暂无推荐内容
                         </div>
                     )}
-                    <div className="mt-8 pb-8 text-center">
-                        <p className="text-xs text-slate-400">
-                            本站仅提供英语学习外刊链接，不提供代理服务。请用户在遵守所在地区法律法规的前提下访问。
-                        </p>
-                    </div>
+
                 </div>
             )}
 
@@ -425,7 +430,9 @@ export default function AIHubPage() {
                         <button onClick={handleAnalyze} disabled={isAnalyzing || wordCount > 3000} className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 ${isAnalyzing || wordCount > 3000 ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-indigo-600 text-white"}`}>
                             {isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />} 开始分析
                         </button>
-                        <div className="mt-2 text-xs text-slate-400">今日剩余导入额度：{remainingImport} 篇</div>
+                        <div className="mt-2 text-xs text-slate-400">
+                          {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余导入额度：${remainingImport} 篇`}
+                        </div>
                         {result && (
                             <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl p-6 border shadow-sm">
                                 <h2 className="text-xl font-bold mb-2">{result.title}</h2>
@@ -453,7 +460,7 @@ export default function AIHubPage() {
                     </div>
                     <div className="p-4 border-t">
                         <div className="mb-2 text-xs text-slate-500">
-                          今日剩余咨询次数：{remainingChat} 次
+                          {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余咨询次数：${remainingChat} 次`}
                         </div>
                         <div className="flex gap-2">
                             <input value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendMessage()} className="flex-1 bg-slate-50 dark:bg-slate-800 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="询问英语问题..." />

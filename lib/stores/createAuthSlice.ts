@@ -56,11 +56,21 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     scheduleMidnightReset();
   };
 
-  const checkAndIncrement = (
+  const checkAndIncrement = async (
     type: "generate" | "import" | "chat" | "sentenceAnalysisCount",
     limit: number,
     message: string
   ) => {
+    // Admin Unlimited Quota
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+       return true;
+    }
+
+    if (get().isAdmin) {
+      return true;
+    }
+
     ensureDailyUsage();
     const current = get().dailyUsage;
     if (current[type] >= limit) {
@@ -130,20 +140,29 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const isAdmin = session?.user?.email === ADMIN_EMAIL;
+      const isAdmin = session?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
       set({ isAdmin });
       return isAdmin;
     },
     checkGenerateQuota: async () => {
+      // Admin Unlimited Quota - Check directly with session to be sure
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+         return true;
+      }
+      
+      // Also check store state as fallback
+      if (get().isAdmin) {
+        return true;
+      }
+
       ensureDailyUsage();
       const current = get().dailyUsage;
       if (current.generate >= 5) {
         toast.error("今日生成额度已用完");
         return false;
       }
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      
       if (!session?.user) {
         toast.error("请先登录再生成");
         return false;

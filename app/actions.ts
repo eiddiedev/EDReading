@@ -72,13 +72,16 @@ export async function analyzeArticleWithAI(
   text: string,
   userId: string,
   level: string = "IELTS",
-  topicId?: string
+  topicId?: string,
+  userTitle?: string
 ): Promise<AIProcessResult> {
   const slicedText = text.slice(0, 3500);
   const normalizedText = truncateToWords(slicedText, 3500);
 
   // ⚡ 0. 缓存策略 (Cache Reuse) - 必须在限流之前检查，避免浪费额度
-  const contentHash = crypto.createHash("sha256").update(normalizedText).digest("hex");
+  // 将 userTitle 加入哈希计算，避免不同标题但相同内容（如"TEST"）命中错误的缓存
+  const hashInput = userTitle ? `${normalizedText}|${userTitle}` : normalizedText;
+  const contentHash = crypto.createHash("sha256").update(hashInput).digest("hex");
   
   // 检查数据库中是否已存在相同内容的已分析文章
   const { data: cachedArticle } = await supabase
@@ -161,12 +164,17 @@ export async function analyzeArticleWithAI(
     const wasTruncated = text.length > 3500 || countWords(text) > 3500;
     const mandatoryKeywords = pickMandatoryKeywords(topicId, 10);
 
+    const titleInstruction = userTitle 
+      ? `CRITICAL: The user has explicitly provided the title: "${userTitle}". You MUST use this EXACT string for the "title" field. For "title_zh", provide a direct Simplified Chinese translation of "${userTitle}". Do NOT generate a new title.`
+      : `Auto-generate a short, engaging English title for "title", and its Simplified Chinese translation for "title_zh".`;
+
     const systemPrompt = `You are an expert IELTS/TOEFL exam passage writer and reviewer.
     **Reference Level:** ${level}
     **Level Guide:** ${levelGuide[level] || levelGuide.IELTS}
     **Length Limit:** ${lengthGuide[level] || lengthGuide.IELTS} words
     **Academic Constraints:** Formal exam tone, no conversational phrases (e.g., "I think"). Use complex logical connectors.
     **Mandatory Keywords:** ${mandatoryKeywords.length > 0 ? mandatoryKeywords.join(", ") : "None"}
+    ${titleInstruction}
     If the input text violates style or length constraints, rewrite it to comply before analyzing.
     Output JSON format:
     {

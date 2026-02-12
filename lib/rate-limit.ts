@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
+import { ADMIN_EMAIL } from "@/lib/constants";
 
 // Simple in-memory cache for short-term rate limiting (1 minute)
 // Key: IP, Value: Timestamp of last request
@@ -11,6 +12,24 @@ const supabase = createClient(
 );
 
 export async function checkRateLimit(userId: string, endpoint: string = "analyze"): Promise<{ allowed: boolean; reason?: string }> {
+  // 0. Admin Bypass (Infinite Quota)
+  if (userId) {
+    try {
+      // Check if user is admin via profiles table (faster than auth.admin)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', userId)
+        .single();
+      
+      if (profile && profile.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        return { allowed: true };
+      }
+    } catch (e) {
+      console.error("Admin check failed", e);
+    }
+  }
+
   const headersList = headers();
   // Get IP from various headers
   const ip = headersList.get("x-forwarded-for")?.split(",")[0] || 

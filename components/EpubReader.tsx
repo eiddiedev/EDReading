@@ -40,10 +40,11 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
   const touchStartRef = useRef<{ x: number, y: number } | null>(null);
 
   const addVocabulary = useAppStore((state) => state.addVocabulary);
-  const { dailyUsage, ensureDailyUsage, checkSentenceAnalysisQuota } = useAppStore((state) => ({
+  const { dailyUsage, ensureDailyUsage, checkSentenceAnalysisQuota, isAdmin } = useAppStore((state) => ({
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
     checkSentenceAnalysisQuota: state.checkSentenceAnalysisQuota,
+    isAdmin: state.isAdmin,
   }));
 
   useEffect(() => {
@@ -442,7 +443,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
                     &ldquo;{selectedText}&rdquo;
                   </p>
                   <div className="mt-2 text-xs text-slate-400">
-                    今日剩余配额：{remainingSentence}/50
+                    {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余配额：${remainingSentence}/50`}
                   </div>
                 </div>
                 <button
