@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at timestamp with time zone
 );
 
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS device_id text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS usage_date text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS generate_count int default 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS import_count int default 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS chat_count int default 0;
+
 -- 4. Enable RLS (Safe to run multiple times)
 ALTER TABLE public.vocabulary ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;

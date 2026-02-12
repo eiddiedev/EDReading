@@ -54,7 +54,7 @@ export const Logo = ({ className = "w-full h-auto" }: { className?: string }) =>
         className="font-sans font-medium fill-[#333333] dark:fill-slate-200"
         style={{ fontSize: '11px', letterSpacing: '0.5px' }}
       >
-        Eiddie's IELTS Reading Library
+        Eiddie&apos;s Reading Library
       </text>
     </svg>
   );

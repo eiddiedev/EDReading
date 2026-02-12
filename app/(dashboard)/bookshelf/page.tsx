@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Plus, Book as BookIcon, Trash2, HardDrive, Loader2 } from "lucide-react";
-import { getAllBooks, saveBook, deleteBook, Book } from "@/lib/storage";
-import { saveBookFile } from "@/lib/book-storage";
+import { Plus, Book as BookIcon, Trash2, Loader2 } from "lucide-react";
+import { getAllBooks, saveBook, deleteBook, saveBookFile, clearLibrary, Book } from "@/lib/storage";
 import Link from "next/link";
 import { toast } from "sonner";
 import ePub from "epubjs";
@@ -24,7 +23,6 @@ export default function BookshelfPage() {
       setBooks(data.sort((a, b) => b.createdAt - a.createdAt));
     } catch (error) {
       console.error("Failed to load books:", error);
-      toast.error("无法加载书籍");
     } finally {
       setIsLoading(false);
     }
@@ -34,42 +32,12 @@ export default function BookshelfPage() {
     fileInputRef.current?.click();
   };
 
-  const handleLoadDemo = async () => {
-    const toastId = toast.loading("正在下载测试书籍 (Alice in Wonderland)...");
-    try {
-      const response = await fetch("https://react-reader.metabits.no/files/alice.epub");
-      if (!response.ok) throw new Error("Download failed");
-      
-      const arrayBuffer = await response.arrayBuffer();
-      const blob = await response.blob();
-      const bookId = "demo-alice";
-
-      // 1. Save file to IDB
-      await saveBookFile(bookId, blob);
-
-      // 2. Save metadata
-      const newBook: Book = {
-        id: bookId,
-        title: "Alice in Wonderland (Demo)",
-        createdAt: Date.now(),
-      };
-
-      await saveBook(newBook);
-      toast.success("测试书籍导入成功", { id: toastId });
-      loadBooks();
-    } catch (error) {
-      console.error("Demo load failed:", error);
-      toast.error("下载测试书籍失败，请检查网络", { id: toastId });
-    }
-  };
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 1. Basic Validation
-    if (!file.name.endsWith('.epub')) {
-      toast.error("只能导入 .epub 格式的电子书 (EPUB only)");
+    if (!file.name.toLowerCase().endsWith('.epub')) {
+      toast.error("格式错误：仅支持 .epub 格式电子书");
       return;
     }
 
@@ -77,14 +45,10 @@ export default function BookshelfPage() {
 
     try {
       const bookId = `book_${Date.now()}`;
-      
-      // 2. Save the ACTUAL FILE to IndexedDB
       await saveBookFile(bookId, file);
 
-      // 3. Save Metadata (Title, etc.)
-      // We still try to parse metadata for better UX, but prioritize saving the file first
-      let title = file.name.replace('.epub', '');
-      let author = "Unknown Author";
+      let title = file.name.replace(/\.epub$/i, '');
+      let author = "Unknown";
       let coverBase64 = undefined;
 
       try {
@@ -105,7 +69,7 @@ export default function BookshelfPage() {
           });
         }
       } catch (parseErr) {
-        console.warn("Metadata parsing failed, using defaults", parseErr);
+        console.warn("Metadata parsing failed:", parseErr);
       }
 
       const newBook: Book = {
@@ -114,17 +78,16 @@ export default function BookshelfPage() {
         author,
         cover: coverBase64,
         createdAt: Date.now(),
+        progress: 0,
       };
 
       await saveBook(newBook);
-      
-      // 4. Success & Refresh
       toast.success("导入成功！", { id: toastId });
       loadBooks();
       
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("导入失败：数据库写入错误", { id: toastId });
+      toast.error(`导入失败：${err.message || "存储空间可能已满"}`, { id: toastId });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -133,14 +96,25 @@ export default function BookshelfPage() {
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    
     if (confirm("确定要删除这本书吗？")) {
       try {
         await deleteBook(id);
         toast.success("已删除");
         loadBooks();
       } catch (error) {
-        toast.error("删除失败");
+        toast.error("删除失败，建议使用重置按钮");
+      }
+    }
+  };
+
+  const handleResetLibrary = async () => {
+    if (confirm("⚠️ 警告：这会清空所有书籍和进度！\n\n仅在书籍无法删除或导入时使用此功能。")) {
+      try {
+        await clearLibrary();
+        toast.success("书架已重置");
+        loadBooks();
+      } catch (e) {
+        toast.error("重置失败");
       }
     }
   };
@@ -148,38 +122,37 @@ export default function BookshelfPage() {
   return (
     <>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
             <div>
               <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
                 书架
               </h1>
-              <div className="flex items-center gap-2 mt-2">
-                <p className="text-slate-600 dark:text-slate-400">
-                  管理您的 ePub 电子书收藏
-                </p>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                  🔒 本地存储 • 不上传云端
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  🔒 仅本地存储 • 不上传云端
+                </span>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
+                  📚 仅支持 .epub 格式
                 </span>
               </div>
             </div>
-            <div className="hidden md:flex items-center gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleLoadDemo}
-                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+            
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleResetLibrary}
+                className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 hover:underline px-2"
               >
-                <BookIcon className="w-5 h-5" />
-                <span className="hidden sm:inline">加载测试书籍</span>
-              </motion.button>
+                重置/修复数据库
+              </button>
+
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleImportClick}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors shadow-sm font-medium"
               >
                 <Plus className="w-5 h-5" />
-                <span className="hidden sm:inline">导入 ePub</span>
+                <span className="hidden sm:inline">导入电子书</span>
               </motion.button>
             </div>
           </div>
@@ -206,81 +179,38 @@ export default function BookshelfPage() {
                 <Plus className="w-5 h-5" />
                 导入 ePub
               </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleLoadDemo}
-                className="inline-flex items-center gap-2 px-6 py-3 ml-4 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                <BookIcon className="w-5 h-5" />
-                加载测试书籍
-              </motion.button>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
               {books.map((book) => (
                 <Link key={book.id} href={`/bookshelf/${book.id}`}>
                   <div className="group relative bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow aspect-[2/3] flex flex-col">
-                    {/* Cover Image or Placeholder */}
                     <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-slate-100 dark:bg-slate-800">
                        {book.cover ? (
-                         <img 
-                           src={book.cover} 
-                           alt={book.title} 
-                           className="w-full h-full object-cover" 
-                         />
+                         /* eslint-disable-next-line @next/next/no-img-element */
+                         <img src={book.cover} alt={book.title} className="w-full h-full object-cover" />
                        ) : (
-                         <>
-                           {/* Default Cover - User specified */}
-                           <img 
-                             src="/default-cover.png" 
-                             alt={book.title}
-                             className="w-full h-full object-cover relative z-10"
-                             onError={(e) => {
-                               e.currentTarget.style.display = 'none';
-                               e.currentTarget.parentElement?.querySelector('.gradient-fallback')?.classList.remove('hidden');
-                             }}
-                           />
-                           
-                           {/* Fallback Gradient (shown if default cover fails) */}
-                           <div className="gradient-fallback hidden absolute inset-0 w-full h-full flex items-center justify-center">
-                             <div className={`absolute inset-0 opacity-20 bg-gradient-to-br ${
-                               ['from-blue-400 to-indigo-500', 'from-emerald-400 to-teal-500', 'from-orange-400 to-red-500', 'from-purple-400 to-pink-500', 'from-cyan-400 to-blue-500'][book.title.length % 5]
-                             }`} />
-                             
-                             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/20 to-transparent" />
-                             
-                             <BookIcon className={`w-12 h-12 opacity-40 relative z-10 ${
-                               ['text-blue-700', 'text-emerald-700', 'text-orange-700', 'text-purple-700', 'text-cyan-700'][book.title.length % 5]
-                             }`} />
-                           </div>
-                         </>
+                         <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
+                           <BookIcon className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-2" />
+                           <span className="text-xs text-slate-400 line-clamp-2">{book.title}</span>
+                         </div>
                        )}
-                      
-                      {/* Progress Badge - Moved to Top Left for better visibility */}
                       {book.progress !== undefined && book.progress > 0 && (
-                        <div className="absolute top-2 left-2 z-20 bg-black/70 backdrop-blur-md text-white text-xs py-1 px-2.5 rounded-full font-medium shadow-sm border border-white/10">
-                          已读 {book.progress}%
+                        <div className="absolute top-2 left-2 z-20 bg-black/70 backdrop-blur-md text-white text-[10px] font-bold py-1 px-2 rounded-full shadow-sm border border-white/10">
+                          {Math.round(book.progress)}%
                         </div>
                       )}
-
-                      {/* Delete Button */}
                       <button
                         onClick={(e) => handleDelete(e, book.id)}
-                        className="absolute top-2 right-2 p-1.5 bg-white/80 dark:bg-black/50 rounded-full text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="删除"
+                        className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-black/60 rounded-full text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
-                    
                     <div className="p-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
-                      <h3 className="font-medium text-slate-900 dark:text-slate-100 line-clamp-2 text-sm h-10 leading-tight">
+                      <h3 className="font-medium text-slate-900 dark:text-slate-100 line-clamp-2 text-sm h-10 leading-tight" title={book.title}>
                         {book.title}
                       </h3>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {new Date(book.createdAt).toLocaleDateString()}
-                      </p>
                     </div>
                   </div>
                 </Link>
@@ -288,26 +218,7 @@ export default function BookshelfPage() {
             </div>
           )}
       </main>
-      
-      {/* Hidden File Input */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".epub"
-        className="hidden"
-      />
-
-      {/* Mobile FAB */}
-      <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={handleImportClick}
-        className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center z-40"
-        aria-label="Import"
-      >
-        <Plus size={28} />
-      </motion.button>
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".epub" className="hidden" />
     </>
   );
 }

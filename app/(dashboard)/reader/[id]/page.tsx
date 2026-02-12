@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { ImmersiveReader } from "@/components/ImmersiveReader";
@@ -8,7 +8,8 @@ import { EpubReader } from "@/components/EpubReader";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Article } from "@/types";
-import { getBookFile } from "@/lib/book-storage";
+import { getBook, getBookFile, updateBookProgress } from "@/lib/storage";
+import { supabase } from "@/lib/supabase";
 
 export default function ReaderPage() {
   const params = useParams();
@@ -19,12 +20,11 @@ export default function ReaderPage() {
   const [article, setArticle] = useState<Article | null>(null);
   const [bookUrl, setBookUrl] = useState<string | null>(null);
   const [bookMetadata, setBookMetadata] = useState<any>(null);
+  const [initialLocation, setInitialLocation] = useState<string | number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
-
-  // 滑动返回相关状态
-  const [touchStart, setTouchStart] = useState<{ x: number, y: number } | null>(null);
-  const [touchEnd, setTouchEnd] = useState<{ x: number, y: number } | null>(null);
-  const minSwipeDistance = 120; // 增加触发阈值，从100增加到120
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchEndRef = useRef<{ x: number; y: number } | null>(null);
+  const minSwipeDistance = 120;
 
   useEffect(() => {
     if (!articleId) {
@@ -43,12 +43,34 @@ export default function ReaderPage() {
     // 2. Try finding in Books (LocalStorage + IndexedDB)
     const loadBook = async () => {
       try {
+        const meta = await getBook(articleId);
+        if (meta) {
+          setBookMetadata(meta);
+          if (meta.position !== undefined) {
+            setInitialLocation(meta.position);
+          }
+        }
+        const blob = await getBookFile(articleId);
+        if (blob) {
+          if (blob.size === 0) {
+            console.error("❌ Book file is empty (0 bytes)");
+          } else {
+            const safeBlob = new Blob([blob], { type: "application/epub+zip" });
+            const url = URL.createObjectURL(safeBlob);
+            setBookUrl(url);
+          }
+          setIsLoading(false);
+          return true;
+        }
         const storedBooks = localStorage.getItem('my_library');
         if (storedBooks) {
           const books = JSON.parse(storedBooks);
           const foundBook = books.find((b: any) => b.id === articleId);
           if (foundBook) {
             setBookMetadata(foundBook);
+            if (foundBook.position !== undefined) {
+              setInitialLocation(foundBook.position);
+            }
             const blob = await getBookFile(articleId);
             if (blob) {
               if (blob.size === 0) {
@@ -61,16 +83,44 @@ export default function ReaderPage() {
               }
             }
             setIsLoading(false);
-            return;
+            return true;
           }
         }
       } catch (error) {
         console.error("Failed to load book:", error);
       }
+      return false;
+    };
+
+    const loadFallback = async () => {
+      const loadedBook = await loadBook();
+      if (loadedBook) return;
+      try {
+        const { data, error } = await supabase
+          .from("articles")
+          .select("*")
+          .eq("id", articleId)
+          .maybeSingle();
+        if (error) {
+          console.error("Failed to load article:", error);
+        }
+        if (data) {
+          setArticle({
+            ...data,
+            id: String(data.id),
+            createdAt: data.createdAt || data.created_at || new Date().toISOString(),
+            wordCount: data.wordCount ?? data.word_count ?? (data.content ? data.content.split(/\s+/).length : 0),
+            isRead: data.isRead ?? data.is_read ?? false,
+            is_public: data.is_public ?? false,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load article:", error);
+      }
       setIsLoading(false);
     };
 
-    loadBook();
+    void loadFallback();
   }, [articles, articleId]);
 
   // Cleanup object URL
@@ -90,51 +140,66 @@ export default function ReaderPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 手势处理
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart({
-      x: e.targetTouches[0].clientX,
-      y: e.targetTouches[0].clientY
-    });
-  };
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditable = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isEditable) return;
+      if (e.key === "Escape" || e.key === "Backspace" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        router.back();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [router]);
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd({
-      x: e.targetTouches[0].clientX,
-      y: e.targetTouches[0].clientY
-    });
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    
-    const xDistance = touchStart.x - touchEnd.x;
-    const yDistance = touchStart.y - touchEnd.y;
-    
-    // 判断是否为右滑 (向右滑动，xDistance 为负)
-    // 1. 距离必须足够长 (minSwipeDistance)
-    // 2. 必须是水平滑动主导 (水平距离 > 垂直距离 * 1.5)
-    const isRightSwipe = xDistance < -minSwipeDistance;
-    const isHorizontal = Math.abs(xDistance) > Math.abs(yDistance) * 1.5;
-
-    if (isRightSwipe && isHorizontal) {
-      // 右滑返回
-      router.back();
-    }
-  };
+  useEffect(() => {
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      touchEndRef.current = null;
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      touchEndRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    };
+    const onTouchEnd = () => {
+      const touchStart = touchStartRef.current;
+      const touchEnd = touchEndRef.current;
+      if (!touchStart || !touchEnd) return;
+      const xDistance = touchStart.x - touchEnd.x;
+      const yDistance = touchStart.y - touchEnd.y;
+      const isRightSwipe = xDistance < -minSwipeDistance;
+      const isHorizontal = Math.abs(xDistance) > Math.abs(yDistance) * 1.5;
+      const isDownSwipe = yDistance < -minSwipeDistance;
+      const isVertical = Math.abs(yDistance) > Math.abs(xDistance) * 1.5;
+      if ((isRightSwipe && isHorizontal) || (isDownSwipe && isVertical)) {
+        router.back();
+      }
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [router]);
 
   const handleBack = () => {
     router.back();
   };
 
   return (
-    <div 
-      className="min-h-screen bg-white dark:bg-slate-900"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
+    <div className="min-h-screen bg-white dark:bg-slate-900">
         <main className={`mx-auto ${bookUrl ? 'w-full px-0 py-0' : 'max-w-4xl px-4 sm:px-6 lg:px-8 py-8'}`}>
           
           {isLoading ? (
@@ -161,6 +226,7 @@ export default function ReaderPage() {
                 phrases={article.phrases} 
                 aiVocabulary={article.aiVocabulary} 
                 tags={article.tags}
+                topic={article.topic}
                 wordCount={article.wordCount}
                 createdAt={article.createdAt}
                 difficulty={article.difficulty === "Beginner" ? "初级" : article.difficulty === "Intermediate" ? "中级" : "高级"}
@@ -180,6 +246,11 @@ export default function ReaderPage() {
                <EpubReader 
                  url={bookUrl} 
                  title={bookMetadata?.title} 
+                 initialLocation={initialLocation}
+                 onProgressChange={(loc, progress) => {
+                   if (!articleId) return;
+                   void updateBookProgress(articleId, loc, progress);
+                 }}
                />
             </div>
           ) : (

@@ -1040,7 +1040,6 @@ export async function fetchWordDefinition(word: string, context?: string): Promi
   // 1. FAST PATH: Check local dict
   const localResult = lookupLocal(word);
   if (localResult) {
-    console.log("⚡ Instant lookup for:", word);
     return {
       word: localResult.text,
       definition: localResult.definition,
@@ -1057,7 +1056,6 @@ export async function fetchWordDefinition(word: string, context?: string): Promi
   // 1.5 FAST PATH (Legacy): Check mock dictionary
   // 优先尝试精确匹配（保留空格，适用于短语）
   if (mockDictionary[lowerWord]) {
-    console.log("⚡ Instant lookup for (legacy):", word);
     const result = { ...mockDictionary[lowerWord] };
     if (!result.exampleTranslation && result.example) {
       result.exampleTranslation = getExampleTranslation(result.example);
@@ -1069,7 +1067,6 @@ export async function fetchWordDefinition(word: string, context?: string): Promi
   const normalizedWord = lowerWord.replace(/[^\w]/g, "");
   
   if (mockDictionary[normalizedWord]) {
-    console.log("⚡ Instant lookup for (legacy normalized):", normalizedWord);
     const result = { ...mockDictionary[normalizedWord] };
     if (!result.exampleTranslation && result.example) {
       result.exampleTranslation = getExampleTranslation(result.example);
@@ -1078,7 +1075,6 @@ export async function fetchWordDefinition(word: string, context?: string): Promi
   }
 
   // 2. SLOW PATH: Call DeepSeek AI
-  console.log("🐢 Fetching AI definition for:", word);
   try {
     const aiResult = await lookupWordAI(word, context);
     if (aiResult) return aiResult;

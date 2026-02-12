@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter, Merriweather } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { SessionListener } from "@/components/SessionListener";
+import { GlobalAnnouncement } from "@/components/GlobalAnnouncement";
 import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -30,6 +32,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${merriweather.variable} bg-slate-50 font-sans`}>
         <ThemeProvider>
+          <SessionListener />
           {children}
           <Toaster richColors position="top-center" />
         </ThemeProvider>

@@ -1,0 +1,212 @@
+import { StateCreator } from "zustand";
+import { AppState, AuthSlice } from "./types";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
+import { ADMIN_EMAIL } from "@/lib/constants";
+
+export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, get) => {
+  const getTodayKey = () => new Date().toISOString().slice(0, 10);
+  const resetUsage = () => ({
+    date: getTodayKey(),
+    generate: 0,
+    import: 0,
+    chat: 0,
+    sentenceAnalysisCount: 0,
+  });
+
+  let resetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const scheduleMidnightReset = () => {
+    if (resetTimer) {
+      clearTimeout(resetTimer);
+    }
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const msUntilMidnight = nextMidnight.getTime() - now.getTime();
+    resetTimer = setTimeout(async () => {
+      set({ dailyUsage: resetUsage() });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const currentDeviceId = get().deviceId;
+      if (session?.user && currentDeviceId) {
+        const today = getTodayKey();
+        await supabase.from("profiles").upsert({
+          id: session.user.id,
+          email: session.user.email,
+          device_id: currentDeviceId,
+          usage_date: today,
+          generate_count: 0,
+          import_count: 0,
+          chat_count: 0,
+          updated_at: new Date().toISOString(),
+        });
+      }
+      scheduleMidnightReset();
+    }, msUntilMidnight);
+  };
+
+  const ensureDailyUsage = () => {
+    const current = get().dailyUsage;
+    if (!current || current.date !== getTodayKey()) {
+      set({ dailyUsage: resetUsage() });
+    }
+    scheduleMidnightReset();
+  };
+
+  const checkAndIncrement = (
+    type: "generate" | "import" | "chat" | "sentenceAnalysisCount",
+    limit: number,
+    message: string
+  ) => {
+    ensureDailyUsage();
+    const current = get().dailyUsage;
+    if (current[type] >= limit) {
+      toast.error(message);
+      return false;
+    }
+    set({ dailyUsage: { ...current, [type]: current[type] + 1 } });
+    return true;
+  };
+
+  return {
+    user: null,
+    setUser: (user) => set({ user, isAdmin: user?.email === ADMIN_EMAIL }),
+    clearUser: () => set({ user: null, isAdmin: false }),
+    logout: async () => {
+      await supabase.auth.signOut();
+      get().clearUser();
+    },
+    dailyUsage: resetUsage(),
+    deviceId: null,
+    isAdmin: false,
+    ensureDailyUsage,
+    ensureDeviceId: async () => {
+      const existing = get().deviceId;
+      if (existing) return existing;
+      try {
+        const agent = await FingerprintJS.load();
+        const result = await agent.get();
+        const deviceId = result.visitorId;
+        set({ deviceId });
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user) {
+          const today = getTodayKey();
+          await supabase.from("profiles").upsert({
+            id: session.user.id,
+            email: session.user.email,
+            device_id: deviceId,
+            usage_date: today,
+            updated_at: new Date().toISOString(),
+          });
+        }
+        return deviceId;
+      } catch (error) {
+        return null;
+      }
+    },
+    ensureAdmin: async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const isAdmin = session?.user?.email === ADMIN_EMAIL;
+      set({ isAdmin });
+      return isAdmin;
+    },
+    checkGenerateQuota: async () => {
+      ensureDailyUsage();
+      const current = get().dailyUsage;
+      if (current.generate >= 5) {
+        toast.error("今日生成额度已用完");
+        return false;
+      }
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        toast.error("请先登录再生成");
+        return false;
+      }
+      const deviceId = await get().ensureDeviceId();
+      if (!deviceId) {
+        toast.error("设备指纹初始化失败");
+        return false;
+      }
+      const today = getTodayKey();
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, device_id, usage_date, generate_count")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      if (profileError) {
+        toast.error("云端校验失败，请稍后再试");
+        return false;
+      }
+      const normalizedGenerate =
+        profile?.usage_date === today ? profile?.generate_count ?? 0 : 0;
+      if (
+        !profile ||
+        profile.device_id !== deviceId ||
+        profile.usage_date !== today
+      ) {
+        const { error: upsertError } = await supabase.from("profiles").upsert({
+          id: session.user.id,
+          email: session.user.email,
+          device_id: deviceId,
+          usage_date: today,
+          generate_count: normalizedGenerate,
+          updated_at: new Date().toISOString(),
+        });
+        if (upsertError) {
+          toast.error("云端校验失败，请稍后再试");
+          return false;
+        }
+      }
+      const { data: deviceProfiles, error: deviceError } = await supabase
+        .from("profiles")
+        .select("generate_count, usage_date")
+        .eq("device_id", deviceId);
+      if (deviceError) {
+        toast.error("云端校验失败，请稍后再试");
+        return false;
+      }
+      const deviceTotal = (deviceProfiles || []).reduce((sum, row) => {
+        if (row.usage_date !== today) return sum;
+        return sum + (row.generate_count ?? 0);
+      }, 0);
+      if (deviceTotal >= 5) {
+        toast.error("该设备今日生成额度已用完");
+        return false;
+      }
+      set({ dailyUsage: { ...current, generate: current.generate + 1 } });
+      const { error: updateError } = await supabase.from("profiles").upsert({
+        id: session.user.id,
+        email: session.user.email,
+        device_id: deviceId,
+        usage_date: today,
+        generate_count: normalizedGenerate + 1,
+        updated_at: new Date().toISOString(),
+      });
+      if (updateError) {
+        set({ dailyUsage: { ...current, generate: current.generate } });
+        toast.error("云端校验失败，请稍后再试");
+        return false;
+      }
+      return true;
+    },
+    checkImportQuota: () =>
+      checkAndIncrement("import", 20, "今日导入额度已用完"),
+    checkChatQuota: () =>
+      checkAndIncrement("chat", 100, "今日咨询额度已用完"),
+    checkSentenceAnalysisQuota: () =>
+      checkAndIncrement(
+        "sentenceAnalysisCount",
+        50,
+        "今日 50 句精读分析配额已用完，请优先精读已分析的内容。"
+      ),
+  };
+};

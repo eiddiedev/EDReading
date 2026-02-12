@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { DictionaryResult, AIVocabulary } from "@/types";
 import { lookupWord, analyzeSentence } from "@/lib/dictionary";
 import { lookupLocal } from "@/lib/local-dictionary";
+import { highlightStaticVocab } from "@/lib/vocab-engine";
+import phrasesData from "@/lib/phrases-data.json";
 import { DictionaryModal } from "./DictionaryModal";
 import { WordCardModal } from "./WordCardModal";
 import { useAppStore } from "@/lib/store";
@@ -17,6 +19,7 @@ interface ImmersiveReaderProps {
   phrases?: string[];
   aiVocabulary?: AIVocabulary[];
   tags?: string[];
+  topic?: string;
   wordCount?: number;
   createdAt?: string;
   difficulty?: string;
@@ -28,7 +31,8 @@ export function ImmersiveReader({
   content, 
   phrases: articlePhrases = [], 
   aiVocabulary = [], 
-  tags = [], 
+  tags = [],
+  topic,
   wordCount, 
   createdAt, 
   difficulty 
@@ -49,28 +53,133 @@ export function ImmersiveReader({
   
   const fontSize = useAppStore((state) => state.fontSize);
   const addVocabulary = useAppStore((state) => state.addVocabulary);
+  const { dailyUsage, ensureDailyUsage, checkSentenceAnalysisQuota } = useAppStore((state) => ({
+    dailyUsage: state.dailyUsage,
+    ensureDailyUsage: state.ensureDailyUsage,
+    checkSentenceAnalysisQuota: state.checkSentenceAnalysisQuota,
+  }));
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedWordRef = useRef<string | null>(null);
+  const phraseCacheRef = useRef<Record<string, DictionaryResult>>({});
+
+  const staticMatches = useMemo(() => highlightStaticVocab(content), [content]);
+  const staticMatchMap = useMemo(() => {
+    const map = new Map<number, (typeof staticMatches)[number]>();
+    staticMatches.forEach((match) => {
+      map.set(match.start, match);
+    });
+    return map;
+  }, [staticMatches]);
+  const aiVocabSet = useMemo(() => new Set(aiVocabulary.map((v) => v.word.toLowerCase())), [aiVocabulary]);
+  const topicKey = useMemo(() => topic?.toLowerCase().trim() || "", [topic]);
 
   // Sync ref with state for async checks
   useEffect(() => {
     selectedWordRef.current = selectedWord;
   }, [selectedWord]);
 
-  // Default phrases (keeping them as base)
-  const defaultPhrases = [
-    "account for", "lead to", "result in", "be responsible for", "contribute to",
-    "cope with", "come up with", "as well as", "in terms of", "due to",
-    "in addition to", "according to", "artificial intelligence", "climate change",
-    "machine learning", "global warming", "sea level", "sea levels",
-    "weather patterns", "play a role", "take into account", "focus on",
-    "depend on", "rely on", "carry out", "make up", "turn out",
-    "set up", "give up", "look for", "look forward to", "participate in",
-    "succeed in", "make predictions", "melting ice caps",
-  ];
+  useEffect(() => {
+    ensureDailyUsage();
+  }, [ensureDailyUsage]);
 
-  // Merge phrases
-  const phrases = Array.from(new Set([...defaultPhrases, ...articlePhrases]));
+  const remainingSentence = Math.max(0, 50 - dailyUsage.sentenceAnalysisCount);
+  const isSentenceSelection = Boolean(selectedText && selectedText.includes(" "));
+
+  const normalizePhrase = useCallback(
+    (phrase: string) =>
+      phrase
+        .replace(/\s+/g, " ")
+        .replace(/sb\.s/gi, "sb.'s")
+        .replace(/sb\.(?=\S)/gi, "sb. ")
+        .replace(/sth\.(?=\S)/gi, "sth. ")
+        .replace(/…/g, " ... ")
+        .trim(),
+    []
+  );
+
+  const buildPhraseRegex = useCallback((phrase: string) => {
+    const normalized = normalizePhrase(phrase.toLowerCase());
+    if (!normalized) return null;
+    const tokens = normalized.split(" ");
+    const tokenPattern = tokens
+      .map((token) => {
+        if (token === "sb." || token === "sb") return "[a-zA-Z'-]+";
+        if (token === "sth." || token === "sth") return "[a-zA-Z'-]+";
+        if (token === "sb.'s") return "[a-zA-Z'-]+(?:'s)?";
+        if (token === "one's") return "[a-zA-Z'-]+(?:'s)?";
+        if (token === "...") return "[a-zA-Z'-]+(?:\\s+[a-zA-Z'-]+){0,2}";
+        return token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      })
+      .join("\\s+");
+    return new RegExp(`\\b${tokenPattern}\\b`, "gi");
+  }, [normalizePhrase]);
+
+  const phrases = useMemo(() => {
+    const merged = [...phrasesData, ...articlePhrases]
+      .map((p) => normalizePhrase(p))
+      .filter(Boolean);
+    return Array.from(new Set(merged));
+  }, [articlePhrases, normalizePhrase]);
+
+  const phrasePatterns = useMemo(
+    () =>
+      phrases
+        .map((phrase) => ({
+          phrase,
+          regex: buildPhraseRegex(phrase),
+          length: phrase.length,
+        }))
+        .filter((item) => item.regex !== null)
+        .sort((a, b) => b.length - a.length),
+    [phrases, buildPhraseRegex]
+  );
+
+  const phraseMatches = useMemo(() => {
+    if (!content || phrasePatterns.length === 0) return [];
+    const occupied = new Array(content.length).fill(false);
+    staticMatches.forEach((match) => {
+      for (let idx = match.start; idx < match.end; idx += 1) occupied[idx] = true;
+    });
+    const matches: { start: number; end: number; text: string; phrase: string }[] = [];
+    phrasePatterns.forEach((pattern) => {
+      if (!pattern.regex) return;
+      pattern.regex.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.regex.exec(content)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+        let blocked = false;
+        for (let idx = start; idx < end; idx += 1) {
+          if (occupied[idx]) {
+            blocked = true;
+            break;
+          }
+        }
+        if (blocked) continue;
+        matches.push({ start, end, text: match[0], phrase: pattern.phrase });
+        for (let idx = start; idx < end; idx += 1) occupied[idx] = true;
+      }
+    });
+    matches.sort((a, b) => a.start - b.start);
+    return matches;
+  }, [content, phrasePatterns, staticMatches]);
+
+  const phraseMatchMap = useMemo(() => {
+    const map = new Map<number, (typeof phraseMatches)[number]>();
+    phraseMatches.forEach((match) => map.set(match.start, match));
+    return map;
+  }, [phraseMatches]);
+
+  useEffect(() => {
+    const cached = localStorage.getItem("phrase_translation_cache_v1");
+    if (cached) {
+      try {
+        phraseCacheRef.current = JSON.parse(cached);
+      } catch {
+        phraseCacheRef.current = {};
+      }
+    }
+  }, []);
 
   // --- Handlers ---
 
@@ -104,7 +213,6 @@ export function ImmersiveReader({
       // 2. Check Local Dictionary (Synchronous / Instant)
       const localResult = lookupLocal(cleanWord);
       if (localResult) {
-        console.log("⚡ Instant lookup (Client-Side) for:", cleanWord);
         setDictionaryResult({
           word: localResult.text,
           definition: localResult.definition,
@@ -150,6 +258,82 @@ export function ImmersiveReader({
     }
   };
 
+  const handleStaticWordClick = (match: (typeof staticMatches)[number]) => {
+    setSelectedWord(match.word.toLowerCase());
+    setHighlightedWord(match.word);
+    setIsSheetOpen(false);
+    setSelectedText(null);
+    setShowWordCard(false);
+    setWordCardData(null);
+    const meaning = `${match.entry.pos} ${match.entry.meaning}`.trim();
+    setDictionaryResult({
+      word: match.word,
+      definition: meaning,
+      example: match.entry.example === "-" ? undefined : match.entry.example,
+      tags: [`📌 核心话题词：${match.entry.label}`],
+      isAiGenerated: false,
+    });
+    setIsDictionaryLoading(false);
+  };
+
+  const buildPhraseContext = (start: number, end: number) => {
+    const padding = 80;
+    const left = Math.max(0, start - padding);
+    const right = Math.min(content.length, end + padding);
+    return content.slice(left, right);
+  };
+
+  const handlePhraseClick = async (phraseText: string, start: number, end: number) => {
+    const cleanPhrase = phraseText.trim();
+    if (!cleanPhrase) return;
+    if (!/^[\x00-\x7F]+$/.test(cleanPhrase)) return;
+    setSelectedWord(cleanPhrase);
+    setHighlightedWord(cleanPhrase);
+    setIsDictionaryLoading(true);
+    setIsSheetOpen(false);
+    setSelectedText(null);
+
+    const cacheKey = cleanPhrase.toLowerCase();
+    const cached = phraseCacheRef.current[cacheKey];
+    if (cached) {
+      setDictionaryResult(cached);
+      setIsDictionaryLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/analyze-selection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selection: cleanPhrase,
+          context: buildPhraseContext(start, end),
+          type: "phrase",
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to analyze phrase");
+      const data = await response.json();
+      const result: DictionaryResult = {
+        word: cleanPhrase,
+        definition: data.definition,
+        phonetic: data.phonetic,
+        example: data.example,
+        exampleTranslation: data.exampleTranslation,
+        tags: data.tags || ["Phrase"],
+        isAiGenerated: true,
+        usage: data.usage,
+      };
+      phraseCacheRef.current[cacheKey] = result;
+      localStorage.setItem("phrase_translation_cache_v1", JSON.stringify(phraseCacheRef.current));
+      setDictionaryResult(result);
+    } catch (error) {
+      console.error("Phrase Analysis Error:", error);
+    } finally {
+      setIsDictionaryLoading(false);
+    }
+  };
+
   // Handle text selection (New Feature)
   const handleSelection = () => {
     // 1. Get Selection
@@ -182,13 +366,17 @@ export function ImmersiveReader({
   const handleAnalyzeSelection = async () => {
     if (!selectedText) return;
     
-    setIsAnalyzing(true);
-    setAnalysisResult(null);
-
     try {
       // 1. Determine Type
       const isWord = !selectedText.includes(" ");
       const type = isWord ? "word" : "sentence";
+
+      if (!isWord && !checkSentenceAnalysisQuota()) {
+        return;
+      }
+
+      setIsAnalyzing(true);
+      setAnalysisResult(null);
 
       // 2. Local Check for Word
       if (isWord) {
@@ -269,40 +457,64 @@ export function ImmersiveReader({
   const renderContent = () => {
     if (!content) return <p className="text-slate-500 italic">No content available.</p>;
     
-    const lower = content.toLowerCase();
     let i = 0;
     const nodes: React.ReactNode[] = [];
     const isWordChar = (ch: string) => /\w/.test(ch);
     const boundaryAt = (pos: number) => pos <= 0 || pos >= content.length || !isWordChar(content[pos]);
 
     while (i < content.length) {
-      // Phrase matching
-      let matchedPhrase: string | null = null;
-      const lowerSlice = lower.substr(i); // Slice rest of string for efficient checking
-      
-      for (const p of phrases) {
-        if (lowerSlice.startsWith(p) && boundaryAt(i - 1) && boundaryAt(i + p.length)) {
-          // Double check exact case match if needed, but usually case-insensitive is better
-          // Prefer longest match? 
-          // Currently just takes first one.
-          // Let's sort phrases by length desc in useEffect to ensure longest match wins
-          matchedPhrase = content.substr(i, p.length);
-          break;
-        }
+      const staticMatch = staticMatchMap.get(i);
+      if (staticMatch) {
+        const labelKey = staticMatch.entry.label.toLowerCase().trim();
+        const isTopicMatch = topicKey && (topicKey.includes(labelKey) || labelKey.includes(topicKey));
+        const difficultyClassMap: Record<string, string> = {
+          easy: "text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/40 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/60",
+          medium: "text-sky-700 dark:text-sky-300 bg-sky-100/70 dark:bg-sky-900/40 hover:bg-sky-200/70 dark:hover:bg-sky-900/60",
+          hard: "text-purple-800 dark:text-purple-200 bg-purple-100/70 dark:bg-purple-900/40 hover:bg-purple-200/70 dark:hover:bg-purple-900/60",
+          expert: "text-rose-700 dark:text-rose-300 bg-rose-100/70 dark:bg-rose-900/40 hover:bg-rose-200/70 dark:hover:bg-rose-900/60",
+        };
+        const difficultyClass =
+          difficultyClassMap[staticMatch.entry.difficulty] ||
+          "text-purple-800 dark:text-purple-200 bg-purple-100/70 dark:bg-purple-900/40 hover:bg-purple-200/70 dark:hover:bg-purple-900/60";
+        const staticClass = [
+          "font-bold cursor-help transition-all",
+          difficultyClass,
+          isTopicMatch ? "border-b-2 border-purple-300 font-extrabold" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        nodes.push(
+          <span
+            key={`static-${staticMatch.start}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStaticWordClick(staticMatch);
+            }}
+            className={staticClass}
+          >
+            {staticMatch.word}
+          </span>
+        );
+        i = staticMatch.end;
+        continue;
       }
 
-      if (matchedPhrase) {
+      const phraseMatch = phraseMatchMap.get(i);
+      if (phraseMatch && boundaryAt(i - 1) && boundaryAt(i + phraseMatch.text.length)) {
         nodes.push(
           <span
             key={`phrase-${i}`}
-            onClick={(e) => { e.stopPropagation(); handleWordClick(matchedPhrase!); }}
-            className="bg-yellow-200 dark:bg-yellow-900/50 text-yellow-900 dark:text-yellow-100 rounded px-1.5 py-0.5 mx-0.5 font-medium border-b-2 border-yellow-400 dark:border-yellow-600 cursor-pointer transition-colors hover:bg-yellow-300 dark:hover:bg-yellow-900/70"
-            title="点击查看短语详情"
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePhraseClick(phraseMatch.text, phraseMatch.start, phraseMatch.end);
+            }}
+            className="text-yellow-600 dark:text-yellow-300 border-b border-dashed border-yellow-400 dark:border-yellow-300 cursor-pointer transition-colors hover:text-yellow-700 dark:hover:text-yellow-200"
+            title="点击查看短语释义"
           >
-            {matchedPhrase}
+            {phraseMatch.text}
           </span>
         );
-        i += matchedPhrase.length;
+        i += phraseMatch.text.length;
         continue;
       }
 
@@ -319,7 +531,7 @@ export function ImmersiveReader({
         while (i < content.length && isWordChar(content[i])) i += 1;
         const word = content.slice(start, i);
         const isHighlighted = highlightedWord === word;
-        const isAiVocab = aiVocabulary.some(v => v.word.toLowerCase() === word.toLowerCase());
+        const isAiVocab = aiVocabSet.has(word.toLowerCase());
 
         nodes.push(
           <span
@@ -327,8 +539,12 @@ export function ImmersiveReader({
             onClick={(e) => { e.stopPropagation(); handleWordClick(word); }}
             className={`cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded px-0.5 transition-colors ${
               isHighlighted ? "bg-primary-200 dark:bg-primary-800" : ""
-            } ${isAiVocab ? "font-bold text-emerald-700 dark:text-emerald-400 border-b-2 border-emerald-200 dark:border-emerald-800" : ""}`}
-            title={isAiVocab ? "重点词汇 (点击查看)" : undefined}
+            } ${
+              isAiVocab
+                ? "text-amber-700 bg-amber-50/60 font-semibold border-b border-amber-200 cursor-help transition-all hover:bg-amber-100"
+                : ""
+            }`}
+            title={isAiVocab ? "重点词汇" : undefined}
           >
             {word}
           </span>
@@ -374,6 +590,10 @@ export function ImmersiveReader({
               <span>{new Date(createdAt).toLocaleDateString()}</span>
             </>
           )}
+        </div>
+        
+        <div className="mt-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+          💡 阅读贴士： 文章已自动标记核心考点。<span className="text-purple-600 dark:text-purple-400 font-medium">颜色标注词汇</span>为雅思核心话题词汇（本地词库，释义可能不全），<span className="text-amber-500 dark:text-amber-400 font-medium">金色下划线</span>为雅思/托福学术常用短语。
         </div>
       </div>
 
@@ -434,8 +654,13 @@ export function ImmersiveReader({
               <div className="flex items-start justify-between mb-4">
                  <div className="flex-1 pr-4">
                     <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 italic border-l-2 border-slate-200 dark:border-slate-700 pl-3">
-                       "{selectedText}"
+                       &ldquo;{selectedText}&rdquo;
                     </p>
+                    {isSentenceSelection && (
+                      <div className="mt-2 text-xs text-slate-400">
+                        今日剩余配额：{remainingSentence}/50
+                      </div>
+                    )}
                  </div>
                  <button 
                    onClick={() => setIsSheetOpen(false)}

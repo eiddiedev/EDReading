@@ -1,428 +1,430 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { ArticleCard } from "@/components/ArticleCard";
 import { PasteToReadModal } from "@/components/PasteToReadModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { TopicSelectionModal, IELTS_TOPICS } from "@/components/TopicSelectionModal";
-// Imports removed
-import { Plus, Sparkles, Book as BookIcon, Loader2 } from "lucide-react";
+import { Sparkles, Plus, Loader2, RefreshCw } from "lucide-react";
 import { Article } from "@/types";
-import { analyzeArticleWithAI } from "@/app/actions";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-
-// Dummy data for initial articles
-const dummyArticles: Article[] = [
-  {
-    id: "1",
-    title: "The Future of Artificial Intelligence",
-    content: "Artificial intelligence is transforming the way we live and work. Machine learning algorithms can now process vast amounts of data and make predictions with remarkable accuracy. These advancements account for significant improvements in efficiency. The applications of AI are endless, from healthcare to transportation, as well as education and entertainment. However, we must cope with ethical challenges that may result in unintended consequences.",
-    difficulty: "Advanced",
-    wordCount: 65,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    title: "Climate Change and Its Impact",
-    content: "Climate change is one of the most pressing issues of our time. Rising global temperatures are causing sea levels to rise, due to melting ice caps. This may lead to severe weather patterns. Scientists according to recent studies are working to understand these changes. We must come up with solutions to protect our planet.",
-    difficulty: "Intermediate",
-    wordCount: 55,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "3",
-    title: "The Benefits of Reading",
-    content: "Reading is a fundamental skill that opens doors to knowledge and imagination. When you read regularly, you improve your vocabulary, enhance your comprehension skills, and expand your understanding of the world. Books can transport you to different places and times.",
-    difficulty: "Beginner",
-    wordCount: 38,
-    createdAt: new Date().toISOString(),
-  },
-];
 
 export default function LibraryPage() {
-  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"mine" | "discover">("mine");
+  const [isLoadingPublic, setIsLoadingPublic] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [generatingIds, setGeneratingIds] = useState<string[]>([]);
+
   const articles = useAppStore((state) => state.articles);
-  const setArticles = useAppStore((state) => state.setArticles);
+  const publicArticles = useAppStore((state) => state.publicArticles);
+  const fetchPublicArticles = useAppStore((state) => state.fetchPublicArticles);
+  const adminDeleteArticle = useAppStore((state) => state.adminDeleteArticle);
   const addArticle = useAppStore((state) => state.addArticle);
   const removeArticle = useAppStore((state) => state.removeArticle);
+  const removeArticleLocal = useAppStore((state) => state.removeArticleLocal);
   const markAsRead = useAppStore((state) => state.markAsRead);
   const toggleReadStatus = useAppStore((state) => state.toggleReadStatus);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [lastTopicId, setLastTopicId] = useState<string | null>(null);
-  const hasCheckedDaily = useRef(false);
+  const setArticles = useAppStore((state) => state.setArticles);
+  const checkGenerateQuota = useAppStore((state) => state.checkGenerateQuota);
+  const ensureDailyUsage = useAppStore((state) => state.ensureDailyUsage);
+  const { isAdmin, ensureAdmin } = useAppStore((state) => ({
+    isAdmin: state.isAdmin,
+    ensureAdmin: state.ensureAdmin,
+  }));
+
+  const sortedMyArticles = useMemo(
+    () => [...articles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [articles]
+  );
+
+  const myArticlesWithStatus = useMemo(
+    () =>
+      sortedMyArticles.map((article) => ({
+        ...article,
+        isGenerating: generatingIds.includes(article.id),
+      })),
+    [sortedMyArticles, generatingIds]
+  );
+
+  const readCount = articles.filter((item) => item.isRead).length;
+  const totalCount = articles.length;
+  const progress = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0;
+  const showGeneratingBanner = isGenerating || generatingIds.length > 0;
 
   useEffect(() => {
     setIsMounted(true);
-    
-    const fetchArticles = async (userId: string) => {
-      const { data, error } = await supabase
-        .from('articles')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-        
-      if (!error && data) {
-          const mapped: Article[] = data.map((d: any) => ({
-            id: d.id,
-            title: d.title,
-            title_zh: d.title_zh, // Attempt to get title_zh if it exists in DB, otherwise undefined
-            original_title: d.original_title, // Map original_title
-            content: d.content,
-            topic: d.topic,
-            difficulty: d.difficulty,
-            wordCount: d.word_count,
-            createdAt: d.created_at,
-            isRead: d.is_read,
-            tags: d.tags || [], // Assuming tags might be in DB or default to empty
-            // Note: phrases, aiVocabulary, aiSentences might be lost if not in DB
-          }));
-          setArticles(mapped);
-       }
-    };
-
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        fetchArticles(session.user.id);
-      } else {
-        setArticles([]); // Strict clear if no user
-      }
-    };
-
-    checkUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-       if (session?.user) {
-         fetchArticles(session.user.id);
-       } else {
-         setArticles([]); // Strict clear on logout/change
-       }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [setArticles]);
-
-  // Auto-Generate Daily Paper Logic
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // 1. Strict Sync Check: Immediate Exit if already done
-    const today = new Date().toISOString().split("T")[0];
-    const lastGen = localStorage.getItem("lastDailyGenDate");
-    if (lastGen === today) return;
-
-    // 2. Ref Check: Prevent Double-Fire in Strict Mode
-    if (hasCheckedDaily.current) return;
-    hasCheckedDaily.current = true;
-
-    const generateDaily = async () => {
-      console.log("☀️ New day detected. Generating Daily Paper...");
-      const toastId = toast.loading("☀️ 早安！AI 正在为您撰写今日日报...");
-
-      try {
-        await handleGenerate(undefined, '7.0', true);
-        localStorage.setItem("lastDailyGenDate", today);
-        toast.success("今日日报已就绪！", { id: toastId });
-      } catch (error) {
-        console.error("Daily Gen Failed", error);
-        toast.error("自动生成失败，请点击“AI 生成”按钮手动重试", { id: toastId });
-        // Do NOT update date, so it tries again next reload
-      }
-    };
-
-    generateDaily();
   }, []);
 
-  const handleGenerate = async (topicPrompt?: string, difficulty: string = '7.0', isAuto: boolean = false, count: number = 1) => {
-    if (isGenerating) return; // Prevent double trigger
-    setIsGenerating(true);
-    
-    // Batch Generation (Parallel)
-    const total = count;
-    let successCount = 0;
+  useEffect(() => {
+    if (!isMounted) return;
+    const updateGeneratingIds = () => {
+      const stored = JSON.parse(localStorage.getItem("generating_article_ids") || "[]");
+      if (!isGenerating && stored.length > 0) {
+        localStorage.setItem("generating_article_ids", "[]");
+        setGeneratingIds([]);
+        return;
+      }
+      const currentArticles = useAppStore.getState().articles;
+      const cleaned = stored.filter((id: string) => !currentArticles.some((item) => item.id === id));
+      if (cleaned.length !== stored.length) {
+        localStorage.setItem("generating_article_ids", JSON.stringify(cleaned));
+      }
+      setGeneratingIds(cleaned);
+    };
+    updateGeneratingIds();
+    const timer = setInterval(updateGeneratingIds, 1000);
+    return () => clearInterval(timer);
+  }, [isMounted, isGenerating]);
 
-    const toastId = isAuto 
-      ? undefined 
-      : toast.loading(`AI 正在全力生成 ${total} 篇文章，请稍候...`);
-
-    const generateOne = async (index: number) => {
-      try {
-        const res = await fetch("/api/generate-ielts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topicPrompt, difficulty }),
-        });
-        
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || `Generation failed: ${res.status}`);
-        }
-        
-        const data = await res.json();
-        
-        if (data.error) {
-           throw new Error(data.error);
-        }
-        
-        // Step 2: Analyze (Fast/Slow Path)
-        let aiResult;
-        
-        if (data.vocabulary && Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
-          // Fast Path
-          aiResult = {
-            phrases: data.phrases || [],
-            vocabulary: data.vocabulary.map((v: any) => ({
-               ...v,
-               translation: v.translation || v.definition || "", 
-               definition: v.definition || v.translation || "" 
-            })),
-            sentences: data.sentences || [],
-            tags: data.tags || []
-          };
-        } else {
-          // Slow Path
-          const analysis = await analyzeArticleWithAI(data.content);
-          aiResult = {
-            phrases: analysis.phrases,
-            vocabulary: analysis.vocabulary,
-            sentences: analysis.sentences,
-            tags: analysis.tags
-          };
-        }
-  
-        const newArticle: Article = {
-          id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substr(2),
-          title: data.title,
-          title_zh: data.title_zh,
-          original_title: data.title, 
-          content: data.content,
-          difficulty: data.difficulty || "Advanced",
-          wordCount: data.content.split(/\s+/).length,
-          createdAt: new Date().toISOString(),
-          topic: data.topic,
-          tags: data.tags || aiResult.tags, 
-          phrases: aiResult.phrases,
-          aiVocabulary: aiResult.vocabulary,
-          aiSentences: aiResult.sentences,
-        };
-        
-        await addArticle(newArticle);
-        successCount++;
-        
-        // Update Progress
-        if (!isAuto && toastId) {
-           toast.loading(`AI 正在生成... (${successCount}/${total} 完成)`, { id: toastId });
-        }
-
-      } catch (error) {
-        console.error(`Gen failed for #${index}`, error);
-        // Don't fail the whole batch
+  useEffect(() => {
+    if (!isMounted) return;
+    let isActive = true;
+    const loadUserArticles = async (userId: string) => {
+      const { data, error } = await supabase
+        .from("articles")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (!isActive) return;
+      if (error) {
+        toast.error("同步文库失败");
+        return;
+      }
+      const normalized = (data || []).map(
+        (item: Article & { created_at?: string; word_count?: number; is_read?: boolean; is_public?: boolean }) => ({
+          ...item,
+          id: String(item.id),
+          createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+          wordCount: item.wordCount ?? item.word_count ?? (item.content ? item.content.split(/\s+/).length : 0),
+          isRead: item.isRead ?? item.is_read ?? false,
+          is_public: item.is_public ?? false,
+        })
+      );
+      const localOnly = useAppStore.getState().articles.filter((item) => item.is_local_only);
+      const merged = [
+        ...normalized,
+        ...localOnly.filter((item) => !normalized.some((serverItem) => serverItem.id === item.id)),
+      ];
+      setArticles(merged);
+    };
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isActive) return;
+      const userId = session?.user?.id;
+      const cachedUserId = localStorage.getItem("current_user_id");
+      if (userId && userId !== cachedUserId) {
+        setArticles([]);
+        localStorage.setItem("current_user_id", userId);
+      }
+      if (userId) {
+        await loadUserArticles(userId);
       }
     };
+    void init();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const userId = session?.user?.id;
+      const cachedUserId = localStorage.getItem("current_user_id");
+      if (!userId) {
+        localStorage.removeItem("current_user_id");
+        setArticles([]);
+        return;
+      }
+      if (userId !== cachedUserId) {
+        setArticles([]);
+        localStorage.setItem("current_user_id", userId);
+      }
+      void loadUserArticles(userId);
+    });
+    return () => {
+      isActive = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [isMounted, setArticles]);
 
-    // Execute in Parallel
-    const promises = Array.from({ length: total }).map((_, i) => generateOne(i));
-    await Promise.all(promises);
+  useEffect(() => {
+    if (!isMounted) return;
+    void ensureAdmin();
+  }, [isMounted, ensureAdmin]);
 
-    setIsGenerating(false);
-    
-    if (!isAuto) {
-       if (successCount > 0) {
-         toast.success(`批量生成完成！成功: ${successCount}/${total}`, { id: toastId });
-       } else {
-         toast.error("生成失败，请重试", { id: toastId });
-       }
+  const fetchPublicLibrary = useCallback(async () => {
+    setIsLoadingPublic(true);
+    try {
+      await fetchPublicArticles();
+    } catch (e) {
+      // toast is handled in store
+    } finally {
+      setIsLoadingPublic(false);
+    }
+  }, [fetchPublicArticles]);
+
+  useEffect(() => {
+    if (activeTab !== "discover") return;
+    void fetchPublicLibrary();
+  }, [activeTab, fetchPublicLibrary]);
+
+  const handleGenerate = async (prompt: string, topicId: string, difficulty: string, count = 1) => {
+    if (isGenerating) return;
+    setIsGenerating(true);
+    setIsTopicModalOpen(false);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) {
+        toast.error("请先登录再生成");
+        return;
+      }
+      ensureDailyUsage();
+
+      let resolvedPrompt = prompt;
+      let resolvedTopicId = topicId;
+
+      if (topicId === "rnd") {
+        const candidates = IELTS_TOPICS.filter((topic) => topic.id !== "rnd");
+        const randomTopic = candidates[Math.floor(Math.random() * candidates.length)];
+        resolvedPrompt = randomTopic.prompt;
+        resolvedTopicId = randomTopic.id;
+      }
+
+      for (let i = 0; i < count; i += 1) {
+        try {
+          if (!(await checkGenerateQuota())) break;
+          const res = await fetch("/api/generate-ielts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              topicPrompt: resolvedPrompt,
+              topicId: resolvedTopicId,
+              level: difficulty,
+              userId,
+            }),
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            toast.error(err.error || "生成失败，请重试");
+            continue;
+          }
+
+          const data = await res.json();
+          const articleId = String(data.id || `${Date.now()}-${i}`);
+          const wordCount = data.wordCount ?? data.word_count ?? (data.content ? data.content.split(/\s+/).length : 0);
+          const createdAt = data.created_at || data.createdAt || new Date().toISOString();
+
+          const newArticle: Article = {
+            id: articleId,
+            title: data.title || "Untitled",
+            title_zh: data.title_zh,
+            content: data.content || "",
+            difficulty: data.difficulty || difficulty,
+            wordCount,
+            createdAt,
+            phrases: data.phrases || [],
+            aiVocabulary: data.vocabulary || data.aiVocabulary || [],
+            aiSentences: data.sentences || data.aiSentences || [],
+            tags: data.tags || [],
+            topic: data.topic,
+            is_public: true,
+          };
+
+          const storedIds = JSON.parse(localStorage.getItem("generating_article_ids") || "[]");
+          const nextIds = Array.from(new Set([...storedIds, articleId]));
+          localStorage.setItem("generating_article_ids", JSON.stringify(nextIds));
+
+          await addArticle(newArticle, true);
+          const { data: { user } } = await supabase.auth.getUser();
+          const { error } = await supabase.from("articles").insert([{
+            id: newArticle.id,
+            title: newArticle.title,
+            title_zh: newArticle.title_zh,
+            content: newArticle.content,
+            difficulty: newArticle.difficulty,
+            tags: newArticle.tags,
+            is_public: true,
+            user_id: user?.id,
+          }]);
+          if (error) {
+            console.error("同步云端失败:", error);
+          }
+
+        } catch (error) {
+          toast.error("生成失败，请重试");
+        }
+      }
+    } finally {
+      localStorage.setItem("generating_article_ids", "[]");
+      setGeneratingIds([]);
+      setIsGenerating(false);
+      setActiveTab("mine");
+      void fetchPublicLibrary();
     }
   };
 
   const handleDelete = (id: string) => {
-    setDeleteId(id);
+    setConfirmDeleteId(id);
   };
 
-  const confirmDelete = () => {
-    if (deleteId) {
-      removeArticle(deleteId);
-      setDeleteId(null);
-      toast.success("文章已删除");
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    await removeArticle(confirmDeleteId);
+    setConfirmDeleteId(null);
+  };
+
+  const handlePublicAdd = async (article: Article, notify = true) => {
+    const localId = `local-${article.id}`;
+    const exists = articles.some((item) => item.id === localId);
+    if (exists) {
+      if (notify) toast.message("已在文库中");
+      return;
     }
+    const localArticle: Article = {
+      ...article,
+      id: localId,
+      createdAt: new Date().toISOString(),
+      is_public: false,
+      is_local_only: true,
+    };
+    await addArticle(localArticle, false);
+    if (notify) toast.success("已加入文库");
   };
 
-  const handleRead = (id: string) => {
-    markAsRead(id);
-    // Navigation is handled by Link in ArticleCard, but we update state before/during navigation
+  const handleAdminDeletePublic = async (id: string) => {
+    await adminDeleteArticle(id);
+    await fetchPublicLibrary();
   };
 
-  const handleToggleRead = (id: string) => {
-    toggleReadStatus(id);
-    toast.success("已标记为未读");
-  };
-
-  // Sort articles: Unread first, then by date
-  const sortedArticles = [...articles].sort((a, b) => {
-    // Unread (0/false) comes first, Read (1/true) comes last
-    return (Number(!!a.isRead) - Number(!!b.isRead));
-  });
-
-  const readCount = articles.filter(b => b.isRead).length;
-  const totalCount = articles.length;
-  const progress = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0;
+  if (!isMounted) return null;
 
   return (
-    <>
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-                文库
-              </h1>
-              <div className="mt-2 flex items-center gap-4">
-                <p className="text-slate-600 dark:text-slate-400">
-                  您的阅读收藏
-                </p>
-                {totalCount > 0 && (
-                  <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-700">
-                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                      📚 阅读进度: <span className="text-primary-600 dark:text-primary-400">{readCount}</span> / {totalCount}
-                    </span>
-                    <div className="w-20 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary-500 rounded-full transition-all duration-500"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            文库
+            {showGeneratingBanner && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs animate-pulse">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                AI 生成中…(๑˃̵ᴗ˂̵)
               </div>
-            </div>
-            <div className="flex gap-3">
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={(e) => { e.preventDefault(); setIsTopicModalOpen(true); }}
-                disabled={isGenerating}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                <Sparkles className={`w-5 h-5 ${isGenerating ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{isGenerating ? "AI 正在生成..." : "AI 生成美文"}</span>
-              </motion.button>
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={(e) => { e.preventDefault(); setIsModalOpen(true); }}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors shadow-sm"
-              >
-                <Plus className="w-5 h-5" />
-                <span className="hidden sm:inline">导入文章</span>
-              </motion.button>
+            )}
+          </h1>
+          <div className="mt-2 flex items-center gap-4">
+            <p className="text-slate-600 dark:text-slate-400">您的阅读收藏</p>
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1 rounded-full shadow-sm border border-slate-200">
+              <span className="text-sm font-medium">
+                📚 阅读进度: <span className="text-primary-600">{readCount}</span> / {totalCount}
+              </span>
+              <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-primary-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+              </div>
             </div>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsTopicModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 min-h-[40px] rounded-full bg-indigo-600 text-white text-sm md:text-base font-medium hover:bg-indigo-700 transition-colors whitespace-nowrap"
+          >
+            <Sparkles className="w-4 h-4" />
+            AI 生成
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsPasteModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 min-h-[40px] rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm md:text-base font-medium border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            导入文章
+          </button>
+        </div>
+      </div>
 
-          {!isMounted ? (
-            <div className="text-center py-16">
-              <p className="text-slate-500 dark:text-slate-400">加载中...</p>
-            </div>
-          ) : (articles.length === 0) ? (
-            <div className="text-center py-16">
-              <p className="text-slate-500 dark:text-slate-400 mb-4">
-                还没有文章。开始您的阅读之旅吧！
-              </p>
-              <div className="flex justify-center gap-4">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-                >
-                  <Plus className="w-5 h-5" />
-                  导入文章
-                </motion.button>
-              </div>
+      <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-full w-fit mb-6">
+        {[
+          { id: "mine", label: "我的文章" },
+          { id: "discover", label: "发现" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id as "mine" | "discover")}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "mine" && (
+        <>
+          {myArticlesWithStatus.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <p className="text-sm">暂无文章，去 AI 生成或导入一篇吧。</p>
             </div>
           ) : (
-            <div className="space-y-12">
-              {articles.length > 0 && (
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-6 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5" />
-                    我的文章 ({articles.length})
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {sortedArticles.map((article) => (
-                      <ArticleCard 
-                        key={article.id} 
-                        article={article} 
-                        onDelete={handleDelete}
-                        onRead={handleRead}
-                        onToggleRead={handleToggleRead}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myArticlesWithStatus.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  onDelete={handleDelete}
+                  onRead={(id) => markAsRead(id)}
+                  onToggleRead={(id) => toggleReadStatus(id)}
+                />
+              ))}
             </div>
           )}
-        </main>
-      
-      {/* Mobile FAB for Import */}
-      <motion.button
-        type="button"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={(e) => { e.preventDefault(); setIsModalOpen(true); }}
-        className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center z-40"
-        aria-label="Import"
-      >
-        <Plus size={28} />
-      </motion.button>
+        </>
+      )}
 
+      {activeTab === "discover" && (
+        <>
+          {isLoadingPublic ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="animate-spin text-primary-600" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {publicArticles.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  onRead={() => handlePublicAdd(article, false)}
+                  onAdd={handlePublicAdd}
+                  onAdminDelete={isAdmin ? handleAdminDeletePublic : undefined}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       <TopicSelectionModal
         isOpen={isTopicModalOpen}
         onClose={() => setIsTopicModalOpen(false)}
-        onSelect={(prompt, topicId, difficulty, count) => {
-          let finalPrompt = prompt;
-
-          // --- SMART RANDOM LOGIC ---
-          if (topicId === 'rnd') {
-            // Filter out the 'random' option AND the last used topic
-            const availableTopics = IELTS_TOPICS.filter(t => t.id !== 'rnd' && t.id !== lastTopicId);
-            
-            // Pick a new one
-            const randomTopic = availableTopics[Math.floor(Math.random() * availableTopics.length)];
-            finalPrompt = randomTopic.prompt;
-            
-            // Update history
-            setLastTopicId(randomTopic.id);
-          } else {
-            setLastTopicId(topicId);
-          }
-
-          setIsTopicModalOpen(false);
-          handleGenerate(finalPrompt, difficulty, false, count);
-        }}
+        onSelect={handleGenerate}
         isGenerating={isGenerating}
       />
-      <PasteToReadModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      <PasteToReadModal isOpen={isPasteModalOpen} onClose={() => setIsPasteModalOpen(false)} />
       <ConfirmModal
-        isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
         onConfirm={confirmDelete}
-        title="删除确认"
-        message="确定要删除这篇文章吗？此操作无法撤销。"
+        title="删除文章"
+        message="确定要删除这篇文章吗？该操作不可撤销。"
+        confirmText="删除"
       />
-    </>
+    </main>
   );
 }

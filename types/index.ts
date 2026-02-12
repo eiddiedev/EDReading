@@ -20,6 +20,23 @@ export interface AISentence {
   structure: string;
 }
 
+export interface VocabularyEntry {
+  id: number;
+  word: string;
+  pos: string;
+  meaning: string;
+  example: string;
+  extra?: string;
+}
+
+export interface VocabularyCategory {
+  label: string;
+  audio?: string;
+  words: VocabularyEntry[][];
+}
+
+export type VocabularyDatabase = Record<string, VocabularyCategory>;
+
 export interface Article {
   id: string;
   title: string;
@@ -42,6 +59,10 @@ export interface Article {
   tags?: string[]; // Added tags support
   coverImage?: string; // Cover image URL
   isRead?: boolean; // Track reading progress
+  level?: string; // Added level support (CET4, CET6, IELTS, TOEFL)
+  is_public?: boolean; // Added public sharing support
+  is_local_only?: boolean;
+  isGenerating?: boolean;
 }
 
 export interface VocabularyWord {
@@ -56,12 +77,17 @@ export interface VocabularyWord {
   correctCount?: number; // Defaults to 0
   lastReviewed?: string; // ISO Date
   tags?: string[];
+  // SRS Fields
+  nextReviewAt?: string;
+  reviewStage?: number;
+  masteryLevel?: number;
 }
 
 export interface DictionaryResult {
   word: string;
   phonetic?: string;
   definition: string;
+  usage?: string;
   example?: string;
   exampleTranslation?: string;
   tags?: string[];

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { batchTranslateTitles } from '@/lib/ai-processor';
+import { checkContentSafety } from "@/lib/safety";
 
 // Proxy to bypass firewalls and parse XML to JSON
 const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
@@ -115,6 +116,11 @@ export async function GET() {
             }
         });
     }
+
+    mixedFeed = mixedFeed.filter(item => {
+      const titleCheck = checkContentSafety(item.title);
+      return titleCheck.isSafe;
+    });
 
     // 4. Shuffle (Fisher-Yates) 
     for (let i = mixedFeed.length - 1; i > 0; i--) {

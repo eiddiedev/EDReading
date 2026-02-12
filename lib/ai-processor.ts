@@ -1,9 +1,11 @@
 import { AIVocabulary, AISentence } from "@/types";
 
 export interface AIProcessResult {
+  id?: string;
   title: string;
   title_zh?: string;
   content: string;
+  level?: string;
   phrases: string[];
   vocabulary: AIVocabulary[];
   sentences: AISentence[];

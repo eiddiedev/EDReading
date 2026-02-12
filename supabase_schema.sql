@@ -39,6 +39,13 @@ ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS is_read boolean default fal
 ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS tags text[];
 ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS created_at timestamp with time zone default now();
 
+-- 4. 确保 profiles 字段完整
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS device_id text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS usage_date text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS generate_count int default 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS import_count int default 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS chat_count int default 0;
+
 -- 7. 确保导航站链接表存在
 CREATE TABLE IF NOT EXISTS public.portal_links (
   id text not null,

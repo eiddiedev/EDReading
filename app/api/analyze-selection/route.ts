@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { checkContentSafety } from "@/lib/safety";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
 const isDeepSeek = !process.env.AI_API_KEY && !!process.env.DEEPSEEK_API_KEY;
@@ -8,32 +15,38 @@ const model = process.env.AI_MODEL || (isDeepSeek ? "deepseek-chat" : "gpt-3.5-t
 
 export async function POST(request: Request) {
   try {
-    const { selection, context, type } = await request.json();
+    const { selection, context, type = "word" } = await request.json();
 
     if (!selection) {
       return NextResponse.json({ error: "No selection provided" }, { status: 400 });
     }
 
+    const safety = checkContentSafety(selection);
+    if (!safety.isSafe) {
+      return NextResponse.json({ error: "内容违规" }, { status: 400 });
+    }
+
+    const cleanWord = selection.trim().toLowerCase();
+
+    if (type === "word") {
+      const { data: cached } = await supabase
+        .from("public_dictionary")
+        .select("*")
+        .eq("word", cleanWord)
+        .single();
+      if (cached) {
+        return NextResponse.json(cached);
+      }
+    }
+
     if (!apiKey) {
-      console.warn("Missing API Key. Env vars:", { 
-        hasAiKey: !!process.env.AI_API_KEY, 
-        hasDeepSeekKey: !!process.env.DEEPSEEK_API_KEY 
-      });
-      // Fallback for dev without key (or implement local logic here)
-      return NextResponse.json({ 
-        error: "AI_API_KEY not configured",
-        mock: true,
-        analysis: "AI key missing. Please configure env vars.",
-        translation: "AI 密钥未配置。",
-        vocabulary: [] 
-      });
+      return NextResponse.json({ error: "AI_API_KEY not configured" }, { status: 500 });
     }
 
     let systemPrompt = "You are an expert English teacher assisting an IELTS student.";
     let userPrompt = "";
 
     if (type === "word") {
-      // Strict Dictionary Mode
       systemPrompt = `
 You are a strict IELTS Dictionary Generator for Chinese students.
 Analyze the target word/phrase in the context of the provided sentence.
@@ -57,9 +70,29 @@ Analyze the target word/phrase in the context of the provided sentence.
 }
 `;
       userPrompt = `Analyze the word "${selection}"${context ? ` in this context: "...${context}..."` : ""}.`;
+    } else if (type === "phrase") {
+      systemPrompt = `
+你是一名资深雅思词汇与短语讲师。该短语属于我的考点库，请结合当前文章语境，给出该短语最准确的中文解释和雅思层面的用法建议。
 
+**OUTPUT RULES (ZERO TOLERANCE):**
+1. **definition**: 必须是简体中文释义，贴合语境。
+2. **usage**: 必须是简体中文，给出雅思层面的用法建议与搭配重点。
+3. **example**: 英文例句，尽量结合语境或生成自然句子。
+4. **exampleTranslation**: 例句中文翻译（简体中文）。
+5. **tags**: 简体中文标签（可选）。
+
+**REQUIRED JSON FORMAT:**
+{
+  "word": "${selection}",
+  "definition": "中文释义",
+  "usage": "用法建议",
+  "example": "English example.",
+  "exampleTranslation": "中文翻译。",
+  "tags": ["短语", "学术"]
+}
+`;
+      userPrompt = `Analyze the phrase "${selection}"${context ? ` in this context: "...${context}..."` : ""}.`;
     } else {
-      // Sentence Analysis Mode
       systemPrompt += " Analyze the sentence grammar (SVO), provide Chinese translation, and list core vocabulary. Return JSON: { \"structure\": {\"subject\": \"...\", \"verb\": \"...\", \"object\": \"...\"}, \"translation\": \"...\", \"vocabulary\": [\"word1\", \"word2\"], \"grammarExplanation\": \"...\" }.";
       userPrompt = `Analyze this sentence:\n"${selection}"${context ? `\nContext: "...${context}..."` : ""}`;
     }
@@ -74,10 +107,7 @@ Analyze the target word/phrase in the context of the provided sentence.
       response_format: { type: "json_object" },
     };
 
-    console.log(`Calling AI API: ${baseUrl} (Model: ${model})`);
-
     const controller = new AbortController();
-    // Increase timeout to 60 seconds for slow AI responses
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
@@ -94,35 +124,38 @@ Analyze the target word/phrase in the context of the provided sentence.
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        const errText = await res.text();
-        console.error("AI API Error:", res.status, errText);
-        // Handle 504 specifically from the upstream API
         if (res.status === 504) {
-             throw new Error("AI Service Timed Out");
+          throw new Error("AI Service Timed Out");
         }
         throw new Error(`AI API Error: ${res.statusText} (${res.status})`);
       }
 
       const data = await res.json();
       let content = data.choices[0].message.content;
-
-      // Clean up markdown code blocks if present
       content = content.replace(/```json/g, "").replace(/```/g, "").trim();
-      
-      return NextResponse.json(JSON.parse(content));
+      const aiResult = JSON.parse(content);
 
+      if (type === "word" && aiResult) {
+        await supabase.from("public_dictionary").upsert({
+          word: cleanWord,
+          phonetic: aiResult.phonetic,
+          definition: aiResult.definition,
+          translation: aiResult.translation,
+          example: aiResult.example,
+          example_zh: aiResult.exampleTranslation,
+          tags: aiResult.tags,
+        });
+      }
+
+      return NextResponse.json(aiResult);
     } catch (fetchError: any) {
-       clearTimeout(timeoutId);
-       if (fetchError.name === 'AbortError') {
-          console.error("AI Request Timed Out (Client Side 60s limit)");
-          return NextResponse.json({ error: "AI 分析超时 (60s)。请稍后再试或检查网络。" }, { status: 504 });
-       }
-       throw fetchError;
+      clearTimeout(timeoutId);
+      if (fetchError.name === "AbortError") {
+        return NextResponse.json({ error: "AI 分析超时 (60s)。请稍后再试或检查网络。" }, { status: 504 });
+      }
+      throw fetchError;
     }
-
   } catch (error: any) {
-    console.error("Analyze Selection Error:", error);
-    const errorMessage = error.message || "Internal Server Error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: "分析失败" }, { status: 500 });
   }
 }

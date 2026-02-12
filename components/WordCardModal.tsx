@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { X, Share2, Download, Loader2, Quote } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 import { DictionaryResult } from "@/types";
 
 interface WordCardModalProps {
@@ -20,16 +21,9 @@ interface CardGenResult {
 export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [cardContent, setCardContent] = useState<CardGenResult | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (isOpen && wordData) {
-      generateCardContent();
-    } else {
-      setCardContent(null);
-    }
-  }, [isOpen, wordData]);
-
-  const generateCardContent = async () => {
+  const generateCardContent = useCallback(async () => {
     if (!wordData) return;
     setIsLoading(true);
     try {
@@ -52,17 +46,103 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
     } finally {
       setIsLoading(false);
     }
+  }, [wordData]);
+
+  useEffect(() => {
+    if (isOpen && wordData) {
+      generateCardContent();
+    } else {
+      setCardContent(null);
+    }
+  }, [isOpen, wordData, generateCardContent]);
+
+  const handleDownload = async () => {
+    if (!cardRef.current || !wordData) return;
+    
+    const toastId = toast.loading("Generating card image...");
+    
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 2, // Higher resolution
+        useCORS: true,
+        backgroundColor: null, // Transparent background handled by CSS
+      } as any);
+
+      const url = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.download = `edreading-card-${wordData.word.toLowerCase()}.png`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Card saved successfully!", { id: toastId });
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error("Failed to save card image", { id: toastId });
+    }
   };
 
-  const handleDownload = () => {
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 1000)),
-      {
-        loading: 'Generating image...',
-        success: 'Word card saved to gallery!',
-        error: 'Failed to save image',
-      }
-    );
+  const handleShare = async () => {
+    if (!cardRef.current || !wordData) return;
+
+    const toastId = toast.loading("Preparing to share...");
+
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+      } as any);
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          toast.error("Failed to generate image", { id: toastId });
+          return;
+        }
+
+        const file = new File([blob], `card-${wordData.word}.png`, { type: "image/png" });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: `Word Card: ${wordData.word}`,
+              text: `Check out this word card for "${wordData.word}" from EDReading!`,
+            });
+            toast.dismiss(toastId);
+          } catch (shareError) {
+            if ((shareError as Error).name !== 'AbortError') {
+              console.error("Share failed:", shareError);
+              // Fallback to clipboard
+              copyToClipboard(blob, toastId);
+            } else {
+              toast.dismiss(toastId);
+            }
+          }
+        } else {
+          // Fallback: Copy to clipboard
+          copyToClipboard(blob, toastId);
+        }
+      }, "image/png");
+    } catch (error) {
+      console.error("Share generation failed:", error);
+      toast.error("Failed to share card", { id: toastId });
+    }
+  };
+
+  const copyToClipboard = async (blob: Blob, toastId: string | number) => {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type]: blob
+        })
+      ]);
+      toast.success("Image copied to clipboard!", { id: toastId });
+    } catch (clipboardError) {
+      console.error("Clipboard failed:", clipboardError);
+      toast.error("Your browser doesn't support image sharing.", { id: toastId });
+    }
   };
 
   if (!isOpen) return null;
@@ -86,7 +166,10 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
             </button>
 
             {/* Card Content */}
-            <div className="p-8 flex flex-col items-center text-center min-h-[400px] justify-center">
+            <div 
+              ref={cardRef}
+              className="p-8 flex flex-col items-center text-center min-h-[400px] justify-center bg-stone-100 dark:bg-stone-900"
+            >
               {isLoading ? (
                 <div className="flex flex-col items-center gap-3 text-stone-500">
                   <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
@@ -95,20 +178,18 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
               ) : wordData && cardContent ? (
                 <div className="w-full space-y-6">
                   {/* Header */}
-                  <div className="space-y-2">
-                    <h2 className="text-4xl font-serif font-bold text-stone-900 dark:text-stone-100 tracking-tight">
+                  <div className="flex flex-col items-center gap-3">
+                    {wordData.tags && wordData.tags[0] && (
+                      <span className="px-3 py-1 rounded-full bg-stone-100 dark:bg-stone-800 text-[10px] uppercase font-bold text-stone-500 dark:text-stone-400 tracking-widest border border-stone-200 dark:border-stone-700">
+                        {wordData.tags[0]}
+                      </span>
+                    )}
+                    <h2 className="text-5xl font-serif font-bold text-stone-900 dark:text-stone-100 tracking-tight">
                       {wordData.word}
                     </h2>
-                    <div className="flex items-center justify-center gap-3">
-                      <span className="text-stone-500 font-mono text-sm tracking-wider">
-                        {wordData.phonetic}
-                      </span>
-                      {wordData.tags && wordData.tags[0] && (
-                        <span className="px-2 py-0.5 rounded-full bg-stone-200 dark:bg-stone-800 text-[10px] uppercase font-bold text-stone-600 dark:text-stone-400 tracking-wider">
-                          {wordData.tags[0]}
-                        </span>
-                      )}
-                    </div>
+                    <span className="text-stone-500 font-mono text-base tracking-wider">
+                      {wordData.phonetic}
+                    </span>
                   </div>
 
                   {/* Divider */}
@@ -149,6 +230,7 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
                 Save Card
               </button>
               <button
+                onClick={handleShare}
                 disabled={isLoading}
                 className="p-3 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 rounded-xl hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors disabled:opacity-50"
               >

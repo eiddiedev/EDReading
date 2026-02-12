@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Sparkles, Loader2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import { Article } from "@/types";
 import { analyzeArticleWithAI } from "@/app/actions";
 import { toast } from "sonner";
@@ -23,7 +24,18 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
     { value: "Intermediate" as const, label: "中级" },
     { value: "Advanced" as const, label: "高级" },
   ];
-  const addArticle = useAppStore((state) => state.addArticle);
+  const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota } = useAppStore((state) => ({
+    addArticle: state.addArticle,
+    dailyUsage: state.dailyUsage,
+    ensureDailyUsage: state.ensureDailyUsage,
+    checkImportQuota: state.checkImportQuota,
+  }));
+  const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
+  const remainingImport = Math.max(0, 20 - dailyUsage.import);
+
+  useEffect(() => {
+    ensureDailyUsage();
+  }, [ensureDailyUsage]);
 
   if (!isOpen) return null;
 
@@ -34,12 +46,33 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
       toast.error("请填写内容");
       return;
     }
+    if (wordCount > 3000) {
+      toast.error("内容超过 3000 词，已禁止导入");
+      return;
+    }
+    if (remainingImport <= 0) {
+      toast.error("今日导入额度已用完");
+      return;
+    }
+    if (!checkImportQuota()) {
+      return;
+    }
 
     setIsAnalyzing(true);
 
     try {
-      // AI Pre-processing
-      const aiResult = await analyzeArticleWithAI(content.trim());
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("请先登录再导入");
+        setIsAnalyzing(false);
+        return;
+      }
+      const levelMap: Record<typeof difficulty, string> = {
+        Beginner: "CET-4",
+        Intermediate: "IELTS",
+        Advanced: "TOEFL",
+      };
+      const aiResult = await analyzeArticleWithAI(content.trim(), user.id, levelMap[difficulty]);
 
       const wordCount = content.split(/\s+/).length;
       const newArticle: Article = {
@@ -56,7 +89,7 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
         tags: aiResult.tags,
       };
 
-      addArticle(newArticle);
+      addArticle(newArticle, false);
       setTitle("");
       setContent("");
       setDifficulty("Intermediate");
@@ -139,6 +172,9 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:opacity-50"
               placeholder="在此粘贴文章内容..."
             />
+            <div className={`mt-2 text-xs ${wordCount > 3000 ? "text-red-500" : "text-slate-500"}`}>
+              Word Count: {wordCount} / 3000
+            </div>
           </div>
           <div className="flex gap-3 pt-4">
             <button
@@ -152,8 +188,8 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isAnalyzing}
-              className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+              disabled={isAnalyzing || wordCount > 3000 || remainingImport <= 0}
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 ${isAnalyzing || wordCount > 3000 || remainingImport <= 0 ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}
             >
               {isAnalyzing ? (
                 <>
@@ -164,6 +200,9 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
                 "创建文章"
               )}
             </button>
+          </div>
+          <div className="text-xs text-slate-400">
+            今日剩余导入额度：{remainingImport} 篇
           </div>
         </div>
       </div>

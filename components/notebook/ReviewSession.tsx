@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { VocabularyWord } from "@/types";
 import { useAppStore } from "@/lib/store";
-import { X, Check, RefreshCw, Trophy, Volume2 } from "lucide-react";
+import { X, Check, Volume2, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 interface ReviewSessionProps {
   onClose: () => void;
@@ -13,7 +14,7 @@ interface ReviewSessionProps {
 
 export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   const incrementReviewCount = useAppStore((state) => state.incrementReviewCount);
-  
+  const markAsMastered = useAppStore((state) => state.markAsMastered);
   const [quizWords, setQuizWords] = useState<VocabularyWord[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState("");
@@ -21,18 +22,49 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
 
-  // Initialize Quiz
+  // Initialize Quiz - Only once to prevent list shifting during review
   useEffect(() => {
-    if (vocabulary.length > 0) {
+    if (vocabulary.length > 0 && quizWords.length === 0) {
       // Use provided words directly, assuming they are already selected/shuffled by parent
       setQuizWords(vocabulary);
     }
-  }, [vocabulary]);
+  }, [vocabulary, quizWords.length]);
 
   const currentWord = quizWords[currentIndex];
 
+  // Safety check to prevent crash if index goes out of bounds
+  if (!currentWord && !isFinished && quizWords.length > 0) {
+    return null; 
+  }
+
+  const handleMaster = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card flip if needed
+    markAsMastered(currentWord.id);
+    toast.success("已标记为熟练，不再复习");
+    
+    // Auto advance
+    nextWord();
+  };
+
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    
+    // If status is 'wrong', user must type correctly to proceed
+    if (status === "wrong") {
+      const cleanInput = userAnswer.trim().toLowerCase();
+      const target = currentWord.word.toLowerCase();
+      if (cleanInput === target) {
+        // Correct correction
+        setStatus("idle"); // Reset to idle to allow next
+        setUserAnswer("");
+        nextWord();
+      } else {
+        // Still wrong
+        // Shake animation is handled by CSS class, maybe trigger a re-render or toast
+      }
+      return;
+    }
+
     if (status !== "idle") return; // Prevent double submit
 
     const cleanInput = userAnswer.trim().toLowerCase();
@@ -50,6 +82,7 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
     } else {
       setStatus("wrong");
       incrementReviewCount(currentWord.id, false);
+      setUserAnswer(""); // Clear input for correction
     }
   };
 
@@ -153,6 +186,30 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
           >
             {/* Card Content */}
             <div className="p-8">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-sm font-medium text-slate-500 mb-1">
+                    进度 {currentIndex + 1} / {quizWords.length}
+                  </h3>
+                  <div className="h-2 w-32 bg-slate-100 rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-indigo-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${((currentIndex + 1) / quizWords.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                
+                <button
+                  onClick={handleMaster}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-xs font-bold transition-colors"
+                  title="标记为熟练（不再复习）"
+                >
+                  <Trophy size={14} />
+                  标熟
+                </button>
+              </div>
+
               {/* Definition */}
               <div className="mb-8 text-center">
                 <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">
@@ -169,7 +226,7 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
               {/* Example Sentence */}
               <div className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-2xl mb-8 relative">
                 <p className="text-lg leading-relaxed text-indigo-900 dark:text-indigo-200 font-medium text-center">
-                  "{getMaskedExample(currentWord.word, currentWord.example)}"
+                  &quot;{getMaskedExample(currentWord.word, currentWord.example)}&quot;
                 </p>
                 {currentWord.exampleTranslation && (
                   <p className="text-sm text-indigo-600 dark:text-indigo-400 mt-3 text-center border-t border-indigo-100 dark:border-indigo-800/50 pt-3">
@@ -184,7 +241,8 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
                   type="text"
                   value={userAnswer}
                   onChange={(e) => setUserAnswer(e.target.value)}
-                  disabled={status !== "idle"}
+                  // Disabled only if correct (waiting for next), but enabled if wrong (need correction)
+                  disabled={status === "correct"}
                   autoFocus
                   className={`w-full text-center text-2xl font-bold py-4 rounded-xl border-2 outline-none transition-all ${
                     status === "correct" 
@@ -193,8 +251,18 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
                       ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 animate-shake"
                       : "border-slate-200 dark:border-slate-600 focus:border-primary-500 dark:bg-slate-900 dark:text-white"
                   }`}
-                  placeholder="输入拼写..."
+                  placeholder={status === "wrong" ? "请重新输入正确拼写" : "输入拼写..."}
                 />
+                
+                {status === "wrong" && (
+                  <div className="mt-4 text-center animate-in fade-in slide-in-from-top-2">
+                    <p className="text-red-500 font-medium mb-1">拼写错误，正确拼写是：</p>
+                    <p className="text-2xl font-bold text-red-600 dark:text-red-400 tracking-wider">
+                      {currentWord.word}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-2">请在上方输入框重新输入以继续</p>
+                  </div>
+                )}
                 
                 {status === "correct" && (
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500">
@@ -203,27 +271,30 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
                 )}
               </form>
 
-              {/* Feedback Area */}
-              <div className="h-12 mt-4 flex items-center justify-center">
-                {status === "wrong" && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col items-center"
-                  >
-                    <p className="text-red-500 font-medium text-sm mb-1">回答错误，正确答案是：</p>
-                    <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{currentWord.word}</p>
-                  </motion.div>
+              {/* Action Button */}
+              <button
+                onClick={() => handleSubmit()}
+                disabled={status === "correct" || (status === "wrong" && userAnswer.trim().toLowerCase() !== currentWord.word.toLowerCase())}
+                className={`w-full mt-8 py-4 rounded-xl font-bold text-lg transition-all ${
+                  status === "correct"
+                    ? "bg-green-500 text-white shadow-lg shadow-green-200 dark:shadow-none scale-105"
+                    : status === "wrong"
+                    ? userAnswer.trim().toLowerCase() === currentWord.word.toLowerCase()
+                      ? "bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-200 dark:shadow-none" // Ready to retry
+                      : "bg-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500" // Locked
+                    : "bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-200 dark:shadow-none hover:scale-[1.02]"
+                }`}
+              >
+                {status === "correct" ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Check className="w-6 h-6" /> 正确!
+                  </span>
+                ) : status === "wrong" ? (
+                  userAnswer.trim().toLowerCase() === currentWord.word.toLowerCase() ? "继续" : "请更正拼写"
+                ) : (
+                  "提交"
                 )}
-                {status === "wrong" && (
-                  <button 
-                    onClick={nextWord}
-                    className="absolute bottom-8 right-8 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                  >
-                    下一个 →
-                  </button>
-                )}
-              </div>
+              </button>
             </div>
           </motion.div>
         </AnimatePresence>

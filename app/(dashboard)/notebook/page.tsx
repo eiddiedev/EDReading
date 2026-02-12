@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { ImportModal } from "@/components/notebook/ImportModal";
 import { ReviewSession } from "@/components/notebook/ReviewSession";
 import { ReviewSetupModal } from "@/components/notebook/ReviewSetupModal";
-import { Trash2, Eye, EyeOff, Plus, PlayCircle } from "lucide-react";
+import { ReviewReminder } from "@/components/notebook/ReviewReminder";
+import { Trash2, Eye, EyeOff, Plus, PlayCircle, BookMarked, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { VocabularyWord } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +17,7 @@ export default function NotebookPage() {
   const setVocabulary = useAppStore((state) => state.setVocabulary);
   const addVocabulary = useAppStore((state) => state.addVocabulary);
   const removeVocabulary = useAppStore((state) => state.removeVocabulary);
+  const fetchReviewItems = useAppStore((state) => state.fetchReviewItems);
   const [showMeanings, setShowMeanings] = useState(true);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isReviewSessionOpen, setIsReviewSessionOpen] = useState(false);
@@ -42,6 +44,10 @@ export default function NotebookPage() {
           reviewCount: v.review_count,
           correctCount: v.correct_count || 0,
           createdAt: v.created_at,
+          nextReviewAt: v.next_review_at,
+          lastReviewed: v.last_reviewed_at,
+          reviewStage: v.review_stage,
+          masteryLevel: v.mastery_level,
           tags: v.tags || []
         }));
         setVocabulary(mapped);
@@ -91,6 +97,31 @@ export default function NotebookPage() {
     setIsReviewSessionOpen(true);
   };
 
+  const handleStartDailyReview = async () => {
+    const loadingToast = toast.loading("正在同步复习进度...");
+    await fetchReviewItems();
+    
+    // Filter due items from the current vocabulary list
+    // Use getState() to access the most up-to-date state after the fetch
+    const currentVocabulary = useAppStore.getState().vocabulary;
+    const dueItems = currentVocabulary.filter(w => {
+      // Must be due AND not mastered
+      const isDue = w.nextReviewAt && new Date(w.nextReviewAt) <= new Date();
+      const isNotMastered = (w.reviewStage || 0) < 100;
+      return isDue && isNotMastered;
+    });
+
+    toast.dismiss(loadingToast);
+
+    if (dueItems.length === 0) {
+      toast.success("太棒了！今日没有需要复习的单词。");
+      return;
+    }
+
+    setReviewWords(dueItems);
+    setIsReviewSessionOpen(true);
+  };
+
   const handleImport = async (words: string[]) => {
     setIsProcessing(true);
     const toastId = toast.loading(`🤖 AI is analyzing ${words.length} words...`);
@@ -114,7 +145,7 @@ export default function NotebookPage() {
       if (data.results && Array.isArray(data.results)) {
         data.results.forEach((item: any) => {
            const newWord: VocabularyWord = {
-             id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+             id: crypto.randomUUID(), // Use standard UUID
              word: item.text || item.word, // Fallback
              phonetic: item.phonetic,
              definition: item.definition,
@@ -143,6 +174,7 @@ export default function NotebookPage() {
 
   return (
     <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <ReviewReminder />
       <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
@@ -153,17 +185,15 @@ export default function NotebookPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              {vocabulary.length > 0 && (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsSetupModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm"
-                >
-                  <PlayCircle className="w-5 h-5" />
-                  <span className="hidden sm:inline">开始复习</span>
-                </motion.button>
-              )}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsSetupModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors shadow-sm"
+              >
+                <Shuffle className="w-5 h-5" />
+                <span className="hidden sm:inline">抽查</span>
+              </motion.button>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -291,7 +321,7 @@ export default function NotebookPage() {
                         {word.example && (
                           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
                             <p className="text-slate-600 dark:text-slate-400 italic text-sm">
-                              "{word.example}"
+                              &quot;{word.example}&quot;
                             </p>
                             {word.exampleTranslation && (
                               <p className="text-slate-500 dark:text-slate-500 text-sm mt-1">

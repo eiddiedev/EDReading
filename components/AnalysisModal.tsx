@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Loader2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -20,15 +20,7 @@ export function AnalysisModal({
   const [result, setResult] = useState<any | null>(null);
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
-  useEffect(() => {
-    if (isOpen && text) {
-      handleAnalyze();
-    } else {
-        setResult(null);
-    }
-  }, [isOpen, text]);
-
-  const handleAnalyze = async () => {
+  const handleAnalyze = useCallback(async () => {
     setIsLoading(true);
     setResult(null);
     try {
@@ -50,7 +42,15 @@ export function AnalysisModal({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [text]);
+
+  useEffect(() => {
+    if (isOpen && text) {
+      handleAnalyze();
+    } else {
+        setResult(null);
+    }
+  }, [isOpen, text, handleAnalyze]);
 
   if (!isOpen) return null;
 
@@ -90,7 +90,7 @@ export function AnalysisModal({
         <div className="flex-1 overflow-y-auto p-6">
           <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
             <p className="text-slate-700 dark:text-slate-300 italic font-serif leading-relaxed">
-              "{text}"
+              &quot;{text}&quot;
             </p>
           </div>
 

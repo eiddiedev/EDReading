@@ -35,7 +35,7 @@ export function ReviewSetupModal({ isOpen, onClose, onStart, totalWords }: Revie
           >
             <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                开启复习
+                单词抽查
               </h2>
               <button
                 onClick={onClose}
@@ -48,7 +48,7 @@ export function ReviewSetupModal({ isOpen, onClose, onStart, totalWords }: Revie
             <div className="p-6 space-y-3">
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 text-center">
                 您的生词本中共有 {totalWords} 个单词。 <br/>
-                请选择本次复习的数量：
+                请选择本次抽查的数量：
               </p>
 
               {options.map((option) => (

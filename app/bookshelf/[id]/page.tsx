@@ -1,281 +1,121 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
-import { ReactReader } from 'react-reader';
-import { getBookFile } from '@/lib/book-storage';
-import { getBook, updateBookProgress } from '@/lib/storage';
+import { useEffect, useRef, useState } from 'react';
+import { getBook, getBookFile, getAllBooks, updateBookProgress } from '@/lib/storage';
 import { useParams, useRouter } from 'next/navigation';
-import { DictionaryModal } from '@/components/DictionaryModal';
-import { AnalysisModal } from '@/components/AnalysisModal';
-import { WordCardModal } from '@/components/WordCardModal';
-import { lookupWord } from '@/lib/dictionary';
-import { lookupLocal } from '@/lib/local-dictionary';
-import { useAppStore } from '@/lib/store';
-import { DictionaryResult } from '@/types';
-import { Sparkles, BookOpen, X, FileText, Book } from 'lucide-react';
-import { ImmersiveReader } from '@/components/ImmersiveReader';
+import { EpubReader } from '@/components/EpubReader';
+import { Loader2 } from 'lucide-react';
 
 export default function BookReaderPage() {
   const params = useParams();
   const router = useRouter();
-  // Change state to hold ArrayBuffer directly to bypass Blob URL issues
   const [bookData, setBookData] = useState<ArrayBuffer | null>(null);
-  const [location, setLocation] = useState<string | number>(0);
+  const [bookTitle, setBookTitle] = useState<string>("");
+  const [initialLocation, setInitialLocation] = useState<string | number | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-
-  // --- New State for AI Features ---
-  const [selection, setSelection] = useState<string | null>(null);
-  const [rendition, setRendition] = useState<any | null>(null);
-  const [showActionSheet, setShowActionSheet] = useState(false);
-  const [currentProgress, setCurrentProgress] = useState(0);
-  const [totalLocations, setTotalLocations] = useState(0);
-
-  // --- Text Mode State ---
-  const [isTextMode, setIsTextMode] = useState(false);
-  const [chapterText, setChapterText] = useState("");
-  const [isLoadingText, setIsLoadingText] = useState(false);
-  const [currentChapterTitle, setCurrentChapterTitle] = useState("");
-  
-  // Modal States
-  const [showDictionary, setShowDictionary] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
-  const [showWordCard, setShowWordCard] = useState(false);
-  const [wordCardData, setWordCardData] = useState<DictionaryResult | null>(null);
-  
-  // Data States
-  const [dictionaryResult, setDictionaryResult] = useState<DictionaryResult | null>(null);
-  const [isDictionaryLoading, setIsDictionaryLoading] = useState(false);
-  
-  const addVocabulary = useAppStore((state) => state.addVocabulary);
-  const selectedWordRef = useRef<string | null>(null);
-  const isSelectingRef = useRef(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchEndRef = useRef<{ x: number; y: number } | null>(null);
+  const minSwipeDistance = 120;
 
   useEffect(() => {
     const loadBook = async () => {
       try {
         const id = params.id as string;
         if (!id) return;
-
-        console.log(`📖 Attempting to load book: ${id}`);
         
-        // 1. Retrieve Blob from IndexedDB
+        // 1. 从合并后的 storage 逻辑获取文件
         const retrievedBlob = await getBookFile(id);
 
-        // 2. Critical Check: Does file exist?
         if (!retrievedBlob) {
-          throw new Error("Local file not found. Please re-import the book.");
+          throw new Error("找不到书籍文件。请返回书架重新导入。");
         }
 
-        // 3. Critical Check: Is file empty?
-        console.log(`📦 File size: ${retrievedBlob.size} bytes`);
-        if (retrievedBlob.size === 0) {
-          throw new Error("File is empty (0 bytes). Import failed.");
+        // 2. 获取书籍元数据
+        const meta = await getBook(id);
+        if (meta) {
+          setBookTitle(meta.title);
+          if (meta.position !== undefined) {
+            setInitialLocation(meta.position);
+          }
+        } else {
+          const allBooks = await getAllBooks();
+          const fallback = allBooks.find(b => b.id === id);
+          if (fallback) setBookTitle(fallback.title);
         }
 
-        // Load Metadata for progress
-        const bookMeta = await getBook(id);
-        if (bookMeta?.position) {
-            setLocation(bookMeta.position);
-        }
-
-        // 4. Convert to ArrayBuffer (The Ultimate Fix)
-        // Instead of Blob URL (which can fail due to worker/network issues),
-        // we pass the raw ArrayBuffer directly to epub.js.
         const buffer = await retrievedBlob.arrayBuffer();
         setBookData(buffer);
 
       } catch (err: any) {
         console.error("❌ Reader Error:", err);
-        setError(err.message || "Failed to load book");
+        setError(err.message || "书籍加载失败");
       }
     };
 
     loadBook();
   }, [params.id]);
 
-  // --- Handlers ---
-
-  const toggleTextMode = async () => {
-    if (isTextMode) {
-      setIsTextMode(false);
-      return;
-    }
-
-    if (!rendition) return;
-
-    setIsLoadingText(true);
-    try {
-      const currentLocation = rendition.currentLocation();
-      let index = 0;
-      if (currentLocation && currentLocation.start) {
-        index = currentLocation.start.index;
-      }
-        
-      const section = rendition.book.spine.get(index);
-      
-      // Get chapter title if available
-      const item = rendition.book.navigation.get(section.href);
-      setCurrentChapterTitle(item ? item.label : `Chapter ${index + 1}`);
-      
-      if (section) {
-         // Load the section content
-         const content = await section.load(rendition.book.load.bind(rendition.book));
-         
-         // Parse HTML content
-         const parser = new DOMParser();
-         // EPUB content is usually XHTML or HTML
-         const doc = parser.parseFromString(content, "text/html");
-         
-         // Extract text with newlines
-         let text = "";
-         const walk = (node: Node) => {
-           if (node.nodeType === Node.TEXT_NODE) {
-             text += node.textContent;
-           } else if (node.nodeType === Node.ELEMENT_NODE) {
-             const tag = (node as Element).tagName.toLowerCase();
-             if (tag === 'br') text += '\n';
-             
-             node.childNodes.forEach(walk);
-             
-             if (['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'].includes(tag)) {
-               text += '\n\n';
-             }
-           }
-         };
-         
-         if (doc.body) {
-            walk(doc.body);
-         } else {
-            // Fallback for some XML structures
-            walk(doc as any);
-         }
-         
-         // Clean up excess newlines
-         setChapterText(text.replace(/\n\s*\n/g, '\n\n').trim());
-         setIsTextMode(true);
-      }
-    } catch (err) {
-      console.error("Text extraction failed", err);
-      // Optionally set an error state here
-    } finally {
-      setIsLoadingText(false);
-    }
-  };
-
-  const onLocationChanged = (epubcifi: string) => {
-    setLocation(epubcifi);
-    if (rendition && params.id) {
-        // Calculate progress percentage
-        // @ts-ignore
-        const currentLocation = rendition.currentLocation();
-        if (currentLocation && currentLocation.start) {
-            const percentage = currentLocation.start.percentage;
-            const newProgress = Math.round(percentage * 100);
-            setCurrentProgress(newProgress);
-            updateBookProgress(params.id as string, epubcifi, newProgress);
-        }
-    }
-  };
-
-  const handlePageJump = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    setCurrentProgress(value);
-    
-    if (rendition) {
-      // If locations are generated, we can jump by percentage
-      // If not, we try our best or wait (but we trigger generation on load)
-      const cfi = rendition.book.locations.cfiFromPercentage(value / 100);
-      if (cfi) {
-        setLocation(cfi);
-      }
-    }
-  };
-
-  // Keyboard Navigation
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (!rendition) return;
-      if (e.key === 'ArrowLeft') {
-        rendition.prev();
-      } else if (e.key === 'ArrowRight') {
-        rendition.next();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditable = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isEditable) return;
+      if (e.key === "Escape" || e.key === "Backspace" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        router.back();
       }
     };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [router]);
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [rendition]);
-
-  const handleLookup = async () => {
-    if (!selection) return;
-    
-    setShowDictionary(true);
-    setShowActionSheet(false); // Close sheet
-    setIsDictionaryLoading(true);
-    setDictionaryResult(null);
-    
-    const cleanWord = selection.toLowerCase().trim().replace(/[^\w\s-]/g, "");
-    selectedWordRef.current = cleanWord;
-
-    try {
-      // 1. Check Local Dictionary (Instant)
-      const localResult = lookupLocal(cleanWord);
-      if (localResult) {
-        setDictionaryResult({
-          word: localResult.text,
-          definition: localResult.definition,
-          phonetic: localResult.phonetic,
-          tags: localResult.tags,
-          example: localResult.example,
-          exampleTranslation: localResult.translation,
-          isAiGenerated: false
-        });
-        setIsDictionaryLoading(false);
-        return;
+  useEffect(() => {
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      touchEndRef.current = null;
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      touchEndRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    };
+    const onTouchEnd = () => {
+      const touchStart = touchStartRef.current;
+      const touchEnd = touchEndRef.current;
+      if (!touchStart || !touchEnd) return;
+      const xDistance = touchStart.x - touchEnd.x;
+      const yDistance = touchStart.y - touchEnd.y;
+      const isDownSwipe = yDistance < -minSwipeDistance;
+      const isVertical = Math.abs(yDistance) > Math.abs(xDistance) * 1.5;
+      if (isDownSwipe && isVertical) {
+        router.back();
       }
-
-      // 2. AI / API Lookup
-      const result = await lookupWord(cleanWord);
-      if (result && selectedWordRef.current === cleanWord) {
-        setDictionaryResult(result);
-      }
-    } catch (error) {
-      console.error("Lookup failed:", error);
-    } finally {
-      setIsDictionaryLoading(false);
-    }
-  };
-
-  const handleAddToNotebook = (word: DictionaryResult) => {
-    addVocabulary({
-      id: Date.now().toString(),
-      word: word.word,
-      phonetic: word.phonetic,
-      definition: word.definition,
-      example: word.example,
-      exampleTranslation: word.exampleTranslation,
-      createdAt: new Date().toISOString(),
-      reviewCount: 0,
-      correctCount: 0,
-    });
-    
-    // Trigger Word Card
-    setWordCardData(word);
-    setShowDictionary(false);
-    setDictionaryResult(null); // Critical: Clear result to ensure modal closes
-    setShowWordCard(true);
-  };
-
-  // --- Render States ---
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [router]);
 
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-slate-50 text-slate-500">
-        <p className="text-xl mb-4">⚠️ {error}</p>
+        <p className="text-lg mb-4 text-red-500 font-bold">{error}</p>
         <button 
+          type="button"
           onClick={() => router.push('/bookshelf')} 
-          className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300 transition" 
+          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-md" 
         >
-          返回书架 (Return to Shelf)
+          返回书架重新导入
         </button>
       </div>
     );
@@ -283,221 +123,32 @@ export default function BookReaderPage() {
 
   if (!bookData) {
     return (
-      <div className="flex items-center justify-center h-screen text-slate-400">
-        <span className="animate-pulse">📖 Loading Book...</span>
+      <div className="flex flex-col items-center justify-center h-screen text-slate-400 gap-4 bg-white dark:bg-slate-900">
+        <Loader2 className="animate-spin w-10 h-10 text-indigo-600" />
+        <span className="text-lg font-medium">正在解析书籍内容...</span>
       </div>
     );
   }
 
   return (
     <div className="h-screen w-screen relative bg-white dark:bg-slate-900 overflow-hidden">
-      
-      {/* Text Mode Toggle Button */}
-      <button 
-        onClick={toggleTextMode} 
-        disabled={isLoadingText}
-        className="absolute top-4 right-4 z-50 bg-white/80 dark:bg-slate-800/80 p-2 rounded-full shadow hover:bg-white dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
-        title={isTextMode ? "Switch to Book Mode" : "Switch to Text Mode"}
-      > 
-        {isLoadingText ? (
-          <span className="animate-spin h-5 w-5 border-2 border-emerald-500 border-t-transparent rounded-full" />
-        ) : isTextMode ? (
-          <Book className="w-5 h-5 text-slate-700 dark:text-slate-200" />
-        ) : (
-          <FileText className="w-5 h-5 text-slate-700 dark:text-slate-200" />
-        )}
-      </button>
-
-      {/* Main Content Area */}
-      {isTextMode ? (
-        <div className="h-full w-full overflow-y-auto bg-white dark:bg-slate-900 px-4 pt-16 pb-20">
-          <div className="max-w-3xl mx-auto">
-             <ImmersiveReader 
-               title={currentChapterTitle || "Chapter Text"} 
-               content={chapterText}
-               wordCount={chapterText.split(/\s+/).length}
-             />
-          </div>
-        </div>
-      ) : (
-        <ReactReader 
-          // @ts-ignore - ReactReader types expect string, but epub.js supports ArrayBuffer
-          url={bookData} 
-        title="My Book" 
-        location={location} 
-        locationChanged={onLocationChanged} 
-        // Ensure styles are full screen 
-        epubOptions={{ 
-          // flow: 'scrolled', // Removed to enable pagination (Flip mode)
-          manager: 'default',
-          // CRITICAL: Disable worker to prevent 404/CORS issues with workers
-          // @ts-ignore
-          worker: false 
+      <EpubReader
+        url={bookData}
+        title={bookTitle}
+        initialLocation={initialLocation}
+        onProgressChange={(loc, progress) => {
+          const id = params.id as string;
+          if (!id) return;
+          void updateBookProgress(id, loc, progress);
         }}
-        getRendition={(r) => {
-          setRendition(r);
-          
-          // A. Apply Font Style (Georgia) inside the iframe
-          r.themes.register('custom', { 
-            'p': { 
-              'font-family': 'Georgia, Cambria, "Times New Roman", Times, serif !important', 
-              'line-height': '1.8 !important',
-              'font-size': '1.125rem !important',
-              'color': '#1e293b !important' // slate-800
-            } 
-          }); 
-          r.themes.select('custom');
-
-          // Ensure locations are generated for progress bar
-          // This might take a moment for large books
-          r.book.ready.then(() => {
-            r.book.locations.generate(1000).then(() => {
-              console.log("Locations generated");
-              // @ts-ignore - total exists at runtime but missing in types
-              setTotalLocations(r.book.locations.total);
-            });
-          });
-
-          // B. Listen for Text Selection
-          r.on('selected', (cfiRange: string, contents: any) => {
-            isSelectingRef.current = true;
-            // Extract the actual text string from the range
-            // Note: r.getRange(cfiRange) returns a Range object
-            const range = r.getRange(cfiRange);
-            const text = range.toString().trim();
-            
-            if (text.length > 0) {
-              setSelection(text);
-              setShowActionSheet(true);
-              // Important: Don't auto-clear selection so user can see what they highlighted
-            }
-            // Reset selection lock after a short delay
-            setTimeout(() => {
-              isSelectingRef.current = false;
-            }, 500);
-          });
-
-          // C. Listen for Click (to dismiss selection/sheet)
-          r.on('click', () => {
-            if (isSelectingRef.current) return;
-            setShowActionSheet(false);
-            setSelection(null);
-            // Optional: clear highlights if any
-            // rendition?.annotations.remove(selection);
-          });
-        }}
-      /> 
-      )} 
-      
-      {/* Back Button Overlay - Always Visible */} 
+      />
       <button 
+        type="button"
         onClick={() => router.back()} 
-        className="absolute top-4 left-4 z-50 bg-white/80 dark:bg-slate-800/80 p-2 rounded-full shadow hover:bg-white dark:hover:bg-slate-800 transition-colors"
+        className="absolute top-4 left-4 z-50 bg-white/90 dark:bg-slate-800/90 p-2 rounded-full shadow-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all"
       > 
-        <span className="text-xl">⬅️</span>
+        <span className="text-xl font-bold">←</span>
       </button>
-
-      {/* Page Turn Buttons (Overlay) - Only in Book Mode */}
-      {!isTextMode && (
-        <>
-          <button 
-            className="absolute top-1/2 left-4 z-40 transform -translate-y-1/2 bg-white/50 dark:bg-black/30 hover:bg-white/80 dark:hover:bg-black/50 p-3 rounded-full transition-colors hidden md:block"
-            onClick={() => rendition?.prev()}
-          >
-            <span className="text-2xl">‹</span>
-          </button>
-          <button 
-            className="absolute top-1/2 right-4 z-40 transform -translate-y-1/2 bg-white/50 dark:bg-black/30 hover:bg-white/80 dark:hover:bg-black/50 p-3 rounded-full transition-colors hidden md:block"
-            onClick={() => rendition?.next()}
-          >
-            <span className="text-2xl">›</span>
-          </button>
-        </>
-      )}
-
-      {/* Progress Control Bar (Bottom) - Only in Book Mode */}
-      {!isTextMode && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-4 transition-transform duration-300 transform translate-y-0">
-           <span className="text-xs text-slate-500 font-mono w-12 text-right">{currentProgress}%</span>
-           <input 
-             type="range" 
-             min="0" 
-             max="100" 
-             step="1"
-             value={currentProgress}
-             onChange={handlePageJump}
-             className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700 accent-emerald-600"
-           />
-           <span className="text-xs text-slate-500 font-mono w-12 text-left">100%</span>
-        </div>
-      )}
-
-      {/* --- Bottom Action Sheet --- */}
-      <div 
-        className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transition-transform duration-300 z-50 rounded-t-2xl p-4 md:p-6 flex gap-4 items-center justify-center border-t border-slate-100 dark:border-slate-800 ${showActionSheet && !isTextMode ? 'translate-y-0' : 'translate-y-full'}`}
-      >
-        {selection && selection.split(' ').length < 3 ? (
-          // Case A: Single Word (or short phrase) -> Show "Lookup"
-          <button 
-            onClick={handleLookup}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-lg active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
-          >
-            <BookOpen className="w-5 h-5" />
-            查单词 (Look Up)
-          </button>
-        ) : (
-          // Case B: Long Sentence -> Show "Analyze"
-          <button 
-            onClick={() => { setShowAnalysis(true); setShowActionSheet(false); }}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold text-lg active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
-          >
-            <Sparkles className="w-5 h-5" />
-            语法分析 (Analyze)
-          </button>
-        )}
-        
-        {/* Close Button (X) */}
-        <button 
-          onClick={() => {
-            setShowActionSheet(false);
-            if (rendition) {
-               // Try to clear selection if possible, though ReactReader doesn't expose easy clearSelection
-               // rendition.getSelection().removeAllRanges(); // This might work depending on internal implementation
-               // For now just clear state
-            }
-            setSelection(null);
-          }}
-          className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-
-      {/* --- Integrate Existing Modals --- */}
-      {showDictionary && (
-        <DictionaryModal 
-          result={dictionaryResult}
-          isLoading={isDictionaryLoading}
-          onClose={() => {
-            setShowDictionary(false);
-            setDictionaryResult(null);
-          }} 
-          onAddToNotebook={handleAddToNotebook}
-        />
-      )}
-      
-      <AnalysisModal 
-        isOpen={showAnalysis} 
-        onClose={() => setShowAnalysis(false)} 
-        text={selection || ''} 
-      />
-
-      <WordCardModal
-        isOpen={showWordCard}
-        onClose={() => setShowWordCard(false)}
-        wordData={wordCardData}
-      />
-
     </div> 
   );
 }
