@@ -34,7 +34,7 @@ export default function ReaderPage() {
 
     // 1. Try finding in Articles Store
     const foundArticle = articles.find((a) => a.id === articleId);
-    if (foundArticle) {
+    if (foundArticle && foundArticle.content) {
       setArticle(foundArticle);
       setIsLoading(false);
       return;
