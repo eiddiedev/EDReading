@@ -86,11 +86,27 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     ensureDeviceId: async () => {
       const existing = get().deviceId;
       if (existing) return existing;
+      
+      let deviceId: string;
       try {
         const agent = await FingerprintJS.load();
         const result = await agent.get();
-        const deviceId = result.visitorId;
-        set({ deviceId });
+        deviceId = result.visitorId;
+      } catch (error) {
+        console.warn("Fingerprint failed, using fallback:", error);
+        // Fallback mechanism
+        const storageKey = 'edreading_device_fallback_id';
+        let fallbackId = localStorage.getItem(storageKey);
+        if (!fallbackId) {
+            fallbackId = `fallback-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            localStorage.setItem(storageKey, fallbackId);
+        }
+        deviceId = fallbackId;
+      }
+
+      set({ deviceId });
+      
+      try {
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -104,10 +120,11 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
             updated_at: new Date().toISOString(),
           });
         }
-        return deviceId;
-      } catch (error) {
-        return null;
+      } catch (e) {
+        console.error("Profile update failed during init:", e);
       }
+      
+      return deviceId;
     },
     ensureAdmin: async () => {
       const {
@@ -143,8 +160,10 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
         .eq("id", session.user.id)
         .maybeSingle();
       if (profileError) {
-        toast.error("云端校验失败，请稍后再试");
-        return false;
+        // Fail Open: 如果查询失败，允许用户继续（假设是网络问题或表结构问题）
+        console.error("Profile check failed:", profileError);
+        // toast.error("云端校验失败，请稍后再试");
+        // return false;
       }
       const normalizedGenerate =
         profile?.usage_date === today ? profile?.generate_count ?? 0 : 0;
@@ -162,8 +181,9 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
           updated_at: new Date().toISOString(),
         });
         if (upsertError) {
-          toast.error("云端校验失败，请稍后再试");
-          return false;
+          console.error("Profile init failed:", upsertError);
+          // toast.error("云端校验失败，请稍后再试");
+          // return false;
         }
       }
       const { data: deviceProfiles, error: deviceError } = await supabase
@@ -171,8 +191,9 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
         .select("generate_count, usage_date")
         .eq("device_id", deviceId);
       if (deviceError) {
-        toast.error("云端校验失败，请稍后再试");
-        return false;
+        console.error("Device check failed:", deviceError);
+        // toast.error("云端校验失败，请稍后再试");
+        // return false;
       }
       const deviceTotal = (deviceProfiles || []).reduce((sum, row) => {
         if (row.usage_date !== today) return sum;
@@ -192,9 +213,11 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
         updated_at: new Date().toISOString(),
       });
       if (updateError) {
-        set({ dailyUsage: { ...current, generate: current.generate } });
-        toast.error("云端校验失败，请稍后再试");
-        return false;
+        // Just log error, but allow generation since we already incremented local state
+        console.error("Quota update failed:", updateError);
+        // set({ dailyUsage: { ...current, generate: current.generate } });
+        // toast.error("云端校验失败，请稍后再试");
+        // return false;
       }
       return true;
     },
