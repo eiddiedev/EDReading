@@ -50,6 +50,16 @@ export interface ArticleSlice {
   markAsRead: (id: string) => Promise<void>;
   toggleReadStatus: (id: string) => Promise<void>;
   setArticles: (articles: Article[]) => void;
+  libraryScrollPosition: number;
+  setLibraryScrollPosition: (position: number) => void;
+  libraryLoadedCount: number;
+  setLibraryLoadedCount: (count: number) => void;
+  // Persistent Pagination State
+  pagedArticles: Article[];
+  pagedHasMore: boolean;
+  pagedPage: number;
+  setPagedState: (articles: Article[], hasMore: boolean, page: number) => void;
+  resetPagedState: () => void;
 }
 
 export interface Announcement {

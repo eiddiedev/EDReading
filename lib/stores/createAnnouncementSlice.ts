@@ -2,7 +2,7 @@ import { StateCreator } from "zustand";
 import { AppState, AnnouncementSlice } from "./types";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { ADMIN_EMAIL } from "@/lib/constants";
+import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 
 export const createAnnouncementSlice: StateCreator<AppState, [], [], AnnouncementSlice> = (set, get) => ({
   latestAnnouncement: null,
@@ -44,7 +44,7 @@ export const createAnnouncementSlice: StateCreator<AppState, [], [], Announcemen
       return;
     }
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user || session.user.email !== ADMIN_EMAIL) {
+    if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email)) {
       toast.error("无权操作");
       return;
     }
@@ -79,7 +79,7 @@ export const createAnnouncementSlice: StateCreator<AppState, [], [], Announcemen
   revokeAllAnnouncements: async () => {
     const { data: { session } } = await supabase.auth.getSession();
     
-    if (!session?.user || session.user.email !== ADMIN_EMAIL) {
+    if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email)) {
       console.warn("Revoke failed: Unauthorized or invalid session", session?.user?.email);
       toast.error("无权操作");
       return;

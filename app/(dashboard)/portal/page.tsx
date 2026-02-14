@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, Globe, ExternalLink, Trash2, Layout, Maximize2, AlertTriangle } from "lucide-react";
+import { Plus, X, Globe, ExternalLink, Trash2, Layout, Maximize2, AlertTriangle, Loader2 } from "lucide-react";
 import { PortalLink } from "@/types";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,6 +11,7 @@ export default function PortalPage() {
   const [links, setLinks] = useState<PortalLink[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeLink, setActiveLink] = useState<PortalLink | null>(null);
+  const [iframeLoading, setIframeLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
   // Form State
@@ -160,6 +161,7 @@ export default function PortalPage() {
     if (link.openMode === "new_tab") {
       window.open(link.url, "_blank");
     } else {
+      setIframeLoading(true);
       setActiveLink(link);
     }
   };
@@ -392,8 +394,17 @@ export default function PortalPage() {
 
             {/* Iframe Content */}
             <div className="flex-1 relative bg-slate-100 dark:bg-slate-950">
+              {iframeLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-900 z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+                    <span className="text-sm text-slate-500 font-medium">正在加载 {activeLink.title}...</span>
+                  </div>
+                </div>
+              )}
               <iframe
                 src={activeLink.url}
+                onLoad={() => setIframeLoading(false)}
                 className="w-full h-full border-0"
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                 title={activeLink.title}

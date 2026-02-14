@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Merriweather } from "next/font/google";
-import "./globals.css";
+import "@/app/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SessionListener } from "@/components/SessionListener";
 import { GlobalAnnouncement } from "@/components/GlobalAnnouncement";

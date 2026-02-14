@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useLayoutEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { ArticleCard } from "@/components/ArticleCard";
@@ -11,16 +11,45 @@ import { Sparkles, Plus, Loader2, RefreshCw } from "lucide-react";
 import { Article } from "@/types";
 import { toast } from "sonner";
 import { triggerHaptic } from "@/lib/utils";
+import { useArticles } from "@/hooks/useArticles";
+import { InView } from "react-intersection-observer";
 
 export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState<"mine" | "discover">("mine");
   const [isLoadingPublic, setIsLoadingPublic] = useState(false);
+  const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<string[]>([]);
+  const [pageSize, setPageSize] = useState(100);
+  const libraryLoadedCount = useAppStore((state) => state.libraryLoadedCount);
+  const setLibraryLoadedCount = useAppStore((state) => state.setLibraryLoadedCount);
+
+  // Task 3: Responsive Page Size
+  useEffect(() => {
+    // Initial check
+    const isMobile = window.innerWidth < 768;
+    setPageSize(isMobile ? 5 : 100);
+
+    const updatePageSize = () => {
+      setPageSize(window.innerWidth < 768 ? 5 : 100);
+    };
+    
+    window.addEventListener("resize", updatePageSize);
+    return () => window.removeEventListener("resize", updatePageSize);
+  }, []);
+
+  // Task 2: Server-Side Pagination
+  const { 
+    articles: pagedArticles, 
+    isLoading: isLoadingPaged, 
+    hasMore, 
+    loadMore, 
+    refresh: refreshArticles 
+  } = useArticles({ pageSize, initialCount: libraryLoadedCount });
 
   const articles = useAppStore((state) => state.articles);
   const publicArticles = useAppStore((state) => state.publicArticles);
@@ -32,6 +61,8 @@ export default function LibraryPage() {
   const markAsRead = useAppStore((state) => state.markAsRead);
   const toggleReadStatus = useAppStore((state) => state.toggleReadStatus);
   const setArticles = useAppStore((state) => state.setArticles);
+  const libraryScrollPosition = useAppStore((state) => state.libraryScrollPosition);
+  const setLibraryScrollPosition = useAppStore((state) => state.setLibraryScrollPosition);
   const checkGenerateQuota = useAppStore((state) => state.checkGenerateQuota);
   const ensureDailyUsage = useAppStore((state) => state.ensureDailyUsage);
   const { isAdmin, ensureAdmin } = useAppStore((state) => ({
@@ -39,31 +70,55 @@ export default function LibraryPage() {
     ensureAdmin: state.ensureAdmin,
   }));
 
-  const sortedMyArticles = useMemo(
-    () => [...articles].sort((a, b) => {
-      // 1. Unread first, Read last
-      const aRead = a.isRead || false;
-      const bRead = b.isRead || false;
-      if (aRead !== bRead) {
-        return aRead ? 1 : -1; // If a is read (true) and b is not (false), a > b, so a goes after b
+  // Use pagedArticles for display instead of store.articles when in 'mine' tab
+  // But we must also include local-only articles that haven't been synced or are offline
+  const displayArticles = useMemo(() => {
+    if (activeTab !== "mine") return articles;
+
+    const localOnly = articles.filter(a => a.is_local_only);
+    const merged = [...localOnly, ...pagedArticles];
+    
+    // Dedup by ID
+    const uniqueMap = new Map();
+    merged.forEach(item => uniqueMap.set(item.id, item));
+    
+    // Sort by isRead (unread first) then created time desc
+    return Array.from(uniqueMap.values()).sort((a, b) => {
+      // 1. Sort by Read status (Unread first = false < true)
+      const isReadA = !!a.isRead;
+      const isReadB = !!b.isRead;
+      if (isReadA !== isReadB) {
+        return isReadA ? 1 : -1;
       }
-      // 2. Sort by Date Descending
+      // 2. Sort by Date
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }),
-    [articles]
-  );
+    });
+  }, [activeTab, articles, pagedArticles]);
+
+  // Sync loaded count to store for scroll restoration support
+  useEffect(() => {
+    if (activeTab === "mine" && displayArticles.length > 0) {
+      setLibraryLoadedCount(displayArticles.length);
+    }
+  }, [displayArticles.length, activeTab, setLibraryLoadedCount]);
+
+  useEffect(() => {
+    if (activeTab === "mine") {
+      setIsLoadingMine(isLoadingPaged);
+    }
+  }, [isLoadingPaged, activeTab]);
 
   const myArticlesWithStatus = useMemo(
     () =>
-      sortedMyArticles.map((article) => ({
+      displayArticles.map((article) => ({
         ...article,
         isGenerating: generatingIds.includes(article.id),
       })),
-    [sortedMyArticles, generatingIds]
+    [displayArticles, generatingIds]
   );
 
-  const readCount = articles.filter((item) => item.isRead).length;
-  const totalCount = articles.length;
+  const readCount = displayArticles.filter((item) => item.isRead).length;
+  const totalCount = displayArticles.length;
   const progress = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0;
   const showGeneratingBanner = isGenerating || generatingIds.length > 0;
 
@@ -71,9 +126,30 @@ export default function LibraryPage() {
     setIsMounted(true);
   }, []);
 
+  // Scroll Restoration Logic
+  // 1. Save scroll position on unmount (navigation or tab switch)
+  useEffect(() => {
+    return () => {
+      // Only save if we are in 'mine' tab and not generating
+      if (activeTab === "mine") {
+        setLibraryScrollPosition(window.scrollY);
+      }
+    };
+  }, [activeTab, setLibraryScrollPosition]);
+
+  // 2. Restore scroll position when data is ready
+  useLayoutEffect(() => {
+    // Only restore if we have articles loaded and a saved position
+    if (isMounted && activeTab === "mine" && libraryScrollPosition > 0 && displayArticles.length > 0) {
+      // Restore immediately if data is present
+      window.scrollTo(0, libraryScrollPosition);
+    }
+  }, [isMounted, activeTab, libraryScrollPosition, displayArticles.length]);
+
   useEffect(() => {
     if (!isMounted) return;
     const updateGeneratingIds = () => {
+
       const stored = JSON.parse(localStorage.getItem("generating_article_ids") || "[]");
       if (!isGenerating && stored.length > 0) {
         localStorage.setItem("generating_article_ids", "[]");
@@ -94,67 +170,14 @@ export default function LibraryPage() {
 
   useEffect(() => {
     if (!isMounted) return;
+    
+    // Disable old full-sync logic if using pagination
+    /*
     let isActive = true;
     const loadUserArticles = async (userId: string) => {
-      const { data, error } = await supabase
-        .from("articles")
-        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read, content")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-      if (!isActive) return;
-      if (error) {
-        toast.error("同步文库失败");
-        return;
-      }
-      const normalized = (data || []).map(
-        (item: any) => ({
-          ...item,
-          id: String(item.id),
-          createdAt: item.createdAt || item.created_at || new Date().toISOString(),
-          wordCount: item.wordCount ?? item.word_count ?? (item.content ? item.content.split(/\s+/).length : 0),
-          isRead: item.isRead ?? item.is_read ?? false,
-          is_public: item.is_public ?? false,
-        })
-      );
-      const localOnly = useAppStore.getState().articles.filter((item) => item.is_local_only);
-      const merged = [
-        ...normalized,
-        ...localOnly.filter((item) => !normalized.some((serverItem) => serverItem.id === item.id)),
-      ];
-      setArticles(merged);
+      // ... logic disabled
     };
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!isActive) return;
-      const userId = session?.user?.id;
-      const cachedUserId = localStorage.getItem("current_user_id");
-      if (userId && userId !== cachedUserId) {
-        setArticles([]);
-        localStorage.setItem("current_user_id", userId);
-      }
-      if (userId) {
-        await loadUserArticles(userId);
-      }
-    };
-    void init();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      const userId = session?.user?.id;
-      const cachedUserId = localStorage.getItem("current_user_id");
-      if (!userId) {
-        localStorage.removeItem("current_user_id");
-        setArticles([]);
-        return;
-      }
-      if (userId !== cachedUserId) {
-        setArticles([]);
-        localStorage.setItem("current_user_id", userId);
-      }
-      void loadUserArticles(userId);
-    });
-    return () => {
-      isActive = false;
-      listener.subscription.unsubscribe();
-    };
+    */
   }, [isMounted, setArticles]);
 
   useEffect(() => {
@@ -248,6 +271,9 @@ export default function LibraryPage() {
           localStorage.setItem("generating_article_ids", JSON.stringify(nextIds));
 
           await addArticle(newArticle, true);
+          
+          // Task 1: Explicit insert handled here, but addArticle also syncs. 
+          // We keep this as is, but ensure we handle errors if any.
           const { data: { user } } = await supabase.auth.getUser();
           const { error } = await supabase.from("articles").insert([{
             id: newArticle.id,
@@ -264,7 +290,12 @@ export default function LibraryPage() {
           }
 
         } catch (error) {
-          toast.error("生成失败，请重试");
+          // Task 1: Show specific error if storage limit exceeded
+          if (error instanceof Error) {
+            toast.error(error.message);
+          } else {
+            toast.error("生成失败，请重试");
+          }
         }
       }
     } finally {
@@ -273,6 +304,8 @@ export default function LibraryPage() {
       setIsGenerating(false);
       setActiveTab("mine");
       void fetchPublicLibrary();
+      // Task 2: Refresh list after generation
+      refreshArticles();
     }
   };
 
@@ -408,22 +441,40 @@ export default function LibraryPage() {
 
       {activeTab === "mine" && (
         <>
-          {myArticlesWithStatus.length === 0 ? (
+          {isLoadingMine && myArticlesWithStatus.length === 0 ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="animate-spin text-primary-600" />
+            </div>
+          ) : myArticlesWithStatus.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-500">
               <p className="text-sm">暂无文章，去 AI 生成或导入一篇吧。</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myArticlesWithStatus.map((article) => (
-                <ArticleCard
-                  key={article.id}
-                  article={article}
-                  onDelete={handleDelete}
-                  onRead={(id) => markAsRead(id)}
-                  onToggleRead={(id) => toggleReadStatus(id)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {myArticlesWithStatus.map((article) => (
+                  <ArticleCard
+                    key={article.id}
+                    article={article}
+                    onDelete={handleDelete}
+                    onToggleRead={(id) => toggleReadStatus(id)}
+                    onClick={() => setLibraryScrollPosition(window.scrollY)}
+                  />
+                ))}
+              </div>
+              {hasMore && (
+                <div className="flex justify-center py-6">
+                  <InView
+                    as="div"
+                    onChange={(inView) => {
+                      if (inView && !isLoadingPaged) loadMore();
+                    }}
+                  >
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                  </InView>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
@@ -455,7 +506,11 @@ export default function LibraryPage() {
         onSelect={handleGenerate}
         isGenerating={isGenerating}
       />
-      <PasteToReadModal isOpen={isPasteModalOpen} onClose={() => setIsPasteModalOpen(false)} />
+      <PasteToReadModal 
+        isOpen={isPasteModalOpen} 
+        onClose={() => setIsPasteModalOpen(false)} 
+        onSuccess={refreshArticles}
+      />
       <ConfirmModal
         isOpen={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}

@@ -3,7 +3,7 @@ import { AppState, AuthSlice } from "./types";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
-import { ADMIN_EMAIL } from "@/lib/constants";
+import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 
 export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, get) => {
   const getTodayKey = () => new Date().toISOString().slice(0, 10);
@@ -64,7 +64,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
   ) => {
     // Admin Unlimited Quota
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    if (session?.user?.email && ADMIN_EMAILS.includes(session.user.email)) {
        return true;
     }
 
@@ -85,7 +85,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
 
   return {
     user: null,
-    setUser: (user) => set({ user, isAdmin: user?.email === ADMIN_EMAIL }),
+    setUser: (user) => set({ user, isAdmin: !!user?.email && ADMIN_EMAILS.includes(user.email) }),
     clearUser: () => set({ user: null, isAdmin: false }),
     logout: async () => {
       await supabase.auth.signOut();
@@ -142,14 +142,14 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const isAdmin = session?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const isAdmin = !!session?.user?.email && ADMIN_EMAILS.includes(session.user.email);
       set({ isAdmin });
       return isAdmin;
     },
     checkGenerateQuota: async () => {
       // Admin Unlimited Quota - Check directly with session to be sure
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      if (session?.user?.email && ADMIN_EMAILS.includes(session.user.email)) {
          return true;
       }
       

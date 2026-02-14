@@ -5,57 +5,59 @@ export interface SRSResult {
 }
 
 /**
- * Calculates the next review time based on the Ebbinghaus forgetting curve
- * Stage Intervals:
- * Stage 0: 0 (Immediate/1 min)
- * Stage 1: 0.5 days (12 hours)
- * Stage 2: 1 day
- * Stage 3: 2 days
- * Stage 4: 4 days
- * Stage 5: 7 days
- * Stage 6: 15 days
- * Stage 7: 30 days (Graduated)
+ * Calculates the next review time based on the "Day-based 4 AM Refresh" logic.
+ * Fixed refresh point: 04:00 AM every day.
+ * Logical Day:
+ * - If now < 04:00 AM, it counts as "yesterday".
+ * - If now >= 04:00 AM, it counts as "today".
+ * 
+ * Intervals (Days): [1, 2, 4, 7, 15, 30]
  */
 export function calculateNextReview(currentStage: number, isCorrect: boolean): SRSResult {
-  const intervals = [0, 0.5, 1, 2, 4, 7, 15, 30]; // Days
+  // Define intervals based on user requirement
+  const intervals = [1, 2, 4, 7, 15, 30]; // Days
   const maxStage = intervals.length - 1;
 
   let newStage = currentStage;
-  let nextReviewDate = new Date();
 
   if (isCorrect) {
     // Increment stage, cap at maxStage
     newStage = Math.min(currentStage + 1, maxStage);
-    
-    // Calculate next review date
-    const daysToAdd = intervals[newStage];
-    
-    // Special Logic: "Overnight Reset"
-    // If interval is 1 day (Stage 2), set to tomorrow 4:00 AM
-    if (daysToAdd === 1) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(4, 0, 0, 0);
-      nextReviewDate = tomorrow;
-    } else {
-      // Standard interval calculation
-      const timeToAdd = daysToAdd * 24 * 60 * 60 * 1000;
-      nextReviewDate = new Date(nextReviewDate.getTime() + timeToAdd);
-    }
-    
   } else {
-    // Incorrect: Reset to 0 or penalty
-    // Strategy: Reset to 0 for strict Ebbinghaus, or max(0, stage - 2) for softer
-    // User requirement: "Stage 重置为 0 (或降级为 max(0, stage - 2))"
-    // Let's implement max(0, stage - 2) to be slightly forgiving but effective
-    // Actually user prompt says: "Stage 重置为 0 ... next_review_at = now (立即重来)"
-    // Let's stick to strict reset to 0 as it's often more effective for "forgotten" items
+    // Reset to 0 on failure (Strict penalty for better retention)
     newStage = 0;
-    // nextReviewDate stays as now() for immediate review
   }
 
-  // Calculate mastery level (0-100) based on stage
-  // Stage 0 = 0%, Stage 6 = 100%
+  // 1. Determine "Logical Day" / Base Date
+  const now = new Date();
+  const currentHour = now.getHours();
+  
+  let baseDate = new Date(now);
+  // If before 4 AM, it's still "yesterday" logically
+  if (currentHour < 4) {
+    baseDate.setDate(baseDate.getDate() - 1);
+  }
+
+  // 2. Get interval days
+  let intervalDays = 1;
+  if (isCorrect) {
+    // Use current stage to determine next interval (e.g. Stage 0 -> 1 day)
+    intervalDays = intervals[Math.min(currentStage, maxStage)];
+  } else {
+    // If failed, reset to base interval (Stage 0 -> 1 day)
+    // Note: If you want immediate review for failure, this logic needs changing.
+    // But "Day-based" usually implies "Next Day".
+    intervalDays = intervals[0];
+  }
+
+  // 3. Calculate next review date
+  const nextReviewDate = new Date(baseDate);
+  nextReviewDate.setDate(baseDate.getDate() + intervalDays);
+
+  // 4. Force set time to 04:00:00
+  nextReviewDate.setHours(4, 0, 0, 0);
+
+  // Calculate mastery level (0-100)
   const masteryLevel = Math.round((newStage / maxStage) * 100);
 
   return {

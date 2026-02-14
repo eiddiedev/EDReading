@@ -11,8 +11,15 @@ export const createReviewSlice: StateCreator<AppState, [], [], ReviewSlice> = (s
   setVocabulary: (words) => set({ vocabulary: words }),
   
   addVocabulary: async (word) => {
-    // Set next review to 1 minute ago to ensure it's immediately due (avoids race conditions with 'now')
-    const nextReview = new Date(Date.now() - 60000);
+    // Set next review to "Logical Today 4 AM" to ensure it's immediately due and aligned
+    const now = new Date();
+    const currentHour = now.getHours();
+    let nextReview = new Date(now);
+    // If before 4 AM, today's logical start was yesterday 4 AM
+    if (currentHour < 4) {
+      nextReview.setDate(nextReview.getDate() - 1);
+    }
+    nextReview.setHours(4, 0, 0, 0);
     
     // Optimistic update
     set((state) => ({
