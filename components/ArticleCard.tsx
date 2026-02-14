@@ -12,6 +12,7 @@ interface ArticleCardProps {
   onRead?: (id: string) => void;
   onToggleRead?: (id: string) => void;
   onAdd?: (article: Article) => void;
+  onClick?: () => void;
 }
 
 // --- 核心升级：适配新的等级系统 ---
@@ -40,7 +41,7 @@ const difficultyLabels: Record<string, string> = {
   Advanced: "高级",
 };
 
-export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggleRead, onAdd }: ArticleCardProps) {
+export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggleRead, onAdd, onClick }: ArticleCardProps) {
   // 如果数据库里的 difficulty 是新标签，就用新的颜色；否则用默认紫
   const difficultyColor = difficultyColors[article.difficulty] || "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400";
   const difficultyLabel = difficultyLabels[article.difficulty] || article.difficulty;
@@ -85,7 +86,14 @@ export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggle
           <Trash2 size={18} />
         </button>
       )}
-      <Link href={`/reader/${article.id}`} onClick={() => onRead && onRead(article.id)} className="block h-full">
+      <Link 
+        href={`/reader/${article.id}`} 
+        onClick={() => {
+          if (onRead) onRead(article.id);
+          if (onClick) onClick();
+        }} 
+        className="block h-full"
+      >
         <div className={`group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300 hover:border-teal-300 dark:hover:border-teal-700 cursor-pointer relative h-full flex flex-col ${article.isRead ? "opacity-60" : ""}`}>
           <div className="p-6 flex-1 flex flex-col">
           <div className="flex items-start justify-between mb-4">

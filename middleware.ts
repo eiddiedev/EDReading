@@ -55,7 +55,7 @@ export async function middleware(request: NextRequest) {
   )
 
   // 这一步最关键：它会检查 Token，如果过期了会自动刷新并写入 Cookie
-  await supabase.auth.getSession()
+  await supabase.auth.getUser()
 
   return response
 }

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { VocabularyWord } from "@/types";
 import { motion } from "framer-motion";
 import { DonationSection } from "@/components/settings/DonationSection";
-import { APP_VERSION, APP_STAGE, ADMIN_EMAIL } from "@/lib/constants";
+import { APP_VERSION, APP_STAGE, ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -50,7 +50,7 @@ export default function SettingsPage() {
 
   const handleAdminClick = () => {
     // 🔒 第一道防线：前端检查
-    if (!session?.user || session.user.email !== ADMIN_EMAIL) {
+    if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email)) {
       toast.error("⛔️ 你没有管理员权限 (Nice try!)");
       return;
     }
@@ -122,10 +122,16 @@ export default function SettingsPage() {
       }
       setSyncStatus('synced');
     } catch (error: any) {
-      console.error("Sync failed:", error);
-      toast.error(`同步失败: ${error.message || "请检查网络"}`, {
-        duration: 4000
-      });
+      if (error.name === 'AbortError' || error.code === 20 || error.message?.includes('AbortError')) {
+        // 静默失败或温和提示
+        console.warn('Sync aborted due to timeout or navigation');
+        toast.info("网络连接较慢，同步仍在后台尝试...");
+      } else {
+        console.error("Sync failed:", error);
+        toast.error(`同步失败: ${error.message || "请检查网络"}`, {
+          duration: 4000
+        });
+      }
       setSyncStatus('idle');
     }
   }, [localVocabulary, setVocabulary, syncStatus]);
@@ -258,7 +264,7 @@ export default function SettingsPage() {
 
           <div className="space-y-6">
             {/* Admin Dashboard */}
-            {session?.user?.email === ADMIN_EMAIL && (
+            {session?.user?.email && ADMIN_EMAILS.includes(session.user.email) && (
               <div className="bg-white dark:bg-slate-800 rounded-lg border border-amber-200 dark:border-amber-900/50 overflow-hidden shadow-sm">
                 <div className="p-6 border-b border-amber-100 dark:border-amber-900/30 bg-amber-50/50 dark:bg-amber-900/10">
                   <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 flex items-center gap-2">

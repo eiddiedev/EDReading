@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { ADMIN_EMAIL } from "@/lib/constants";
+import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +52,7 @@ export async function DELETE(req: Request) {
     if (userError || !userData?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (userData.user.email !== ADMIN_EMAIL) {
+    if (!ADMIN_EMAILS.includes(userData.user.email)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

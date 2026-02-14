@@ -17,6 +17,7 @@ export default function ReaderPage() {
   const rawId = params?.id as string;
   const articleId = rawId ? decodeURIComponent(rawId) : "";
   const articles = useAppStore((state) => state.articles);
+  const markAsRead = useAppStore((state) => state.markAsRead);
   const [article, setArticle] = useState<Article | null>(null);
   const [bookUrl, setBookUrl] = useState<string | null>(null);
   const [bookMetadata, setBookMetadata] = useState<any>(null);
@@ -240,6 +241,9 @@ export default function ReaderPage() {
                 wordCount={article.wordCount}
                 createdAt={article.createdAt}
                 difficulty={article.difficulty === "Beginner" ? "初级" : article.difficulty === "Intermediate" ? "中级" : "高级"}
+                onReadComplete={() => {
+                   if (articleId) markAsRead(articleId);
+                }}
               />
             </>
           ) : bookUrl ? (
@@ -260,6 +264,9 @@ export default function ReaderPage() {
                  onProgressChange={(loc, progress) => {
                    if (!articleId) return;
                    void updateBookProgress(articleId, loc, progress);
+                   if (progress > 0.9) {
+                     markAsRead(articleId);
+                   }
                  }}
                />
             </div>
