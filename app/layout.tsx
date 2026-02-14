@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Merriweather } from "next/font/google";
 import "@/app/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -16,11 +16,14 @@ const merriweather = Merriweather({
   variable: "--font-merriweather",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#0d9488",
+};
+
 export const metadata: Metadata = {
   title: "EDReading - IELTS Reading Practice",
   description: "A Shanbay-inspired English learning app for IELTS reading practice",
   manifest: "/manifest.json",
-  themeColor: "#0d9488",
   icons: {
     icon: '/icon.png',
     apple: '/apple-touch-icon.png',

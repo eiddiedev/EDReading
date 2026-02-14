@@ -30,7 +30,7 @@ export async function checkRateLimit(userId: string, endpoint: string = "analyze
     }
   }
 
-  const headersList = headers();
+  const headersList = await headers();
   // Get IP from various headers
   const ip = headersList.get("x-forwarded-for")?.split(",")[0] || 
              headersList.get("x-real-ip") || 
