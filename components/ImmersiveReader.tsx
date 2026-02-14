@@ -23,6 +23,7 @@ interface ImmersiveReaderProps {
   wordCount?: number;
   createdAt?: string;
   difficulty?: string;
+  onReadComplete?: () => void;
 }
 
 import { triggerHaptic } from "@/lib/utils";
@@ -37,7 +38,8 @@ export function ImmersiveReader({
   topic,
   wordCount, 
   createdAt, 
-  difficulty 
+  difficulty,
+  onReadComplete
 }: ImmersiveReaderProps) {
   // State
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -64,6 +66,31 @@ export function ImmersiveReader({
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedWordRef = useRef<string | null>(null);
   const phraseCacheRef = useRef<Record<string, DictionaryResult>>({});
+  const hasReadRef = useRef(false);
+  const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Scroll detection for read status
+  useEffect(() => {
+    const handleScroll = () => {
+      if (hasReadRef.current || !onReadComplete) return;
+
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+
+      // Trigger when scrolled to 90%
+      if (scrollTop + windowHeight >= documentHeight * 0.9) {
+        hasReadRef.current = true;
+        onReadComplete();
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    // Check initial position in case content is short
+    handleScroll();
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [onReadComplete]);
 
   const staticMatches = useMemo(() => highlightStaticVocab(content), [content]);
   const staticMatchMap = useMemo(() => {
@@ -188,6 +215,11 @@ export function ImmersiveReader({
 
   // Handle single word click (Existing functionality - Instant lookup)
   const handleWordClick = async (word: string) => {
+    // Clear any selection to prevent conflict with handleSelection
+    if (typeof window !== "undefined") {
+      window.getSelection()?.removeAllRanges();
+    }
+    
     // 保留空格和连字符，只移除标点符号
     const cleanWord = word.toLowerCase().trim().replace(/[^\w\s-]/g, "");
     if (cleanWord.length > 0) {
@@ -262,6 +294,9 @@ export function ImmersiveReader({
   };
 
   const handleStaticWordClick = (match: (typeof staticMatches)[number]) => {
+    if (typeof window !== "undefined") {
+      window.getSelection()?.removeAllRanges();
+    }
     setSelectedWord(match.word.toLowerCase());
     setHighlightedWord(match.word);
     setIsSheetOpen(false);
@@ -287,6 +322,9 @@ export function ImmersiveReader({
   };
 
   const handlePhraseClick = async (phraseText: string, start: number, end: number) => {
+    if (typeof window !== "undefined") {
+      window.getSelection()?.removeAllRanges();
+    }
     const cleanPhrase = phraseText.trim();
     if (!cleanPhrase) return;
     if (!/^[\x00-\x7F]+$/.test(cleanPhrase)) return;
@@ -338,10 +376,17 @@ export function ImmersiveReader({
   };
 
   // Handle text selection (New Feature)
-  const handleSelection = () => {
-    // 1. Get Selection
+  const handleSelection = useCallback(() => {
+    // Only handle if sheet is not already open for a word
+    if (isSheetOpen && analysisResult?.type === "word") return;
+
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return;
+
+    // Ensure selection is within content area
+    if (contentRef.current && selection.anchorNode && !contentRef.current.contains(selection.anchorNode)) {
+      return;
+    }
 
     const text = selection.toString().trim();
     if (text.length > 0) {
@@ -350,21 +395,27 @@ export function ImmersiveReader({
        setAnalysisResult(null); 
        setIsAnalyzing(false);
     }
-  };
+  }, [isSheetOpen, analysisResult]);
 
   // Add event listener for selectionchange to handle mobile selection handles better
   useEffect(() => {
     const onSelectionChange = () => {
-      // Debounce or wait for selection to settle?
-      // On mobile, selection changes as user drags handles.
-      // We might want to wait until they stop? 
-      // Actually, 'selectionchange' fires continuously.
-      // 'touchend' on the container is already handled below.
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+      }
+      
+      // Debounce: Wait 600ms for selection to settle (handles user dragging handles)
+      selectionTimeoutRef.current = setTimeout(() => {
+         handleSelection();
+      }, 600);
     };
     
-    // document.addEventListener('selectionchange', onSelectionChange);
-    // return () => document.removeEventListener('selectionchange', onSelectionChange);
-  }, []);
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange);
+      if (selectionTimeoutRef.current) clearTimeout(selectionTimeoutRef.current);
+    };
+  }, [handleSelection]);
 
   const handleAnalyzeSelection = async () => {
     if (!selectedText) return;
@@ -446,7 +497,7 @@ export function ImmersiveReader({
     setWordCardData(word);
     setSelectedWord(null); // Close Dictionary Modal (it uses selectedWord !== null)
     setIsSheetOpen(false); // Close action sheet
-    setShowWordCard(true);
+    // setShowWordCard(true); // Disable auto-popup of Word Card
   };
 
   const closeModal = () => {
@@ -605,7 +656,7 @@ export function ImmersiveReader({
           阅读
         </h2>
         <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
-           💡 选中文字以使用AI分析
+           💡 点击单词/框选句子以使用AI分析
         </span>
       </div>
 
@@ -617,12 +668,8 @@ export function ImmersiveReader({
           fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif',
           lineHeight: '1.8'
         }}
-        onMouseUp={handleSelection}
-        onTouchEnd={(e) => {
-           // On mobile, touchend fires before selection is fully finalized by the OS in some cases.
-           // We add a small delay to let the OS selection update.
-           setTimeout(handleSelection, 100);
-        }}
+        // onMouseUp={handleSelection} - Handled by selectionchange
+        // onTouchEnd - Handled by selectionchange
       >
         <div 
           className="text-slate-800 dark:text-slate-200 text-lg md:text-xl tracking-wide whitespace-pre-wrap"
@@ -811,6 +858,12 @@ export function ImmersiveReader({
         isLoading={isDictionaryLoading}
         onClose={closeModal}
         onAddToNotebook={handleAddToNotebook}
+        onOpenWordCard={(word) => {
+          setWordCardData(word);
+          setShowWordCard(true);
+          // Close DictionaryModal for smooth transition
+          setSelectedWord(null); 
+        }}
       />
 
       <WordCardModal

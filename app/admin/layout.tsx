@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { ADMIN_EMAIL } from "@/lib/constants";
+import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,7 +21,7 @@ export default function AdminLayout({
       try {
         const { data: { user } } = await supabase.auth.getUser();
 
-        if (!user || user.email !== ADMIN_EMAIL) {
+        if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
           toast.error("⛔️ 拒绝访问：仅限管理员进入");
           router.replace("/"); // Kick back to home
           return;

@@ -149,7 +149,7 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <AnimatePresence>
         {isOpen && (
           <motion.div

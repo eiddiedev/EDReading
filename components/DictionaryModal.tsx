@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Plus, Loader2, Check } from "lucide-react";
+import { Plus, X, Loader2, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
 import { useAppStore } from "@/lib/store";
-import { motion, AnimatePresence, PanInfo } from "framer-motion";
+import { motion, AnimatePresence, PanInfo, useDragControls } from "framer-motion";
 
 interface DictionaryModalProps {
   result: DictionaryResult | null;
   isLoading?: boolean;
   onClose: () => void;
   onAddToNotebook: (word: DictionaryResult) => void;
+  onOpenWordCard?: (word: DictionaryResult) => void;
   disableDrag?: boolean;
 }
 
@@ -20,10 +21,12 @@ export function DictionaryModal({
   isLoading = false,
   onClose,
   onAddToNotebook,
+  onOpenWordCard,
   disableDrag = false,
 }: DictionaryModalProps) {
   const vocabulary = useAppStore((state) => state.vocabulary);
   const [isSaved, setIsSaved] = useState(false);
+  const dragControls = useDragControls();
 
   // 监听结果变化，检查单词是否已经收藏过
   useEffect(() => {
@@ -79,8 +82,13 @@ export function DictionaryModal({
 
     return (
       <>
-        {/* 单词头部 */}
-        <div className="mb-6">
+        {/* 单词头部 (可拖拽区域) */}
+        <div 
+          className="mb-6 touch-none cursor-grab active:cursor-grabbing"
+          onPointerDown={(e) => {
+            if (!disableDrag) dragControls.start(e);
+          }}
+        >
           <div className="flex items-baseline gap-3 mb-2">
             <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100">
               {result.word}
@@ -143,7 +151,7 @@ export function DictionaryModal({
         </div>
 
         {/* 底部操作按钮 */}
-        <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-700">
+        <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
            <button
              onClick={handleAddToNotebookAction}
              disabled={isSaved}
@@ -165,6 +173,16 @@ export function DictionaryModal({
                </>
              )}
            </button>
+
+           {isSaved && onOpenWordCard && (
+             <button
+               onClick={() => onOpenWordCard(result)}
+               className="w-full py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all active:scale-95 bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800"
+             >
+               <Sparkles className="w-5 h-5" />
+               生成记忆卡片
+             </button>
+           )}
         </div>
       </>
     );
@@ -190,6 +208,8 @@ export function DictionaryModal({
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             drag={disableDrag ? false : "y"}
+            dragListener={false}
+            dragControls={dragControls}
             dragConstraints={disableDrag ? undefined : { top: 0 }}
             dragElastic={disableDrag ? undefined : 0.2}
             onDragEnd={disableDrag ? undefined : (e, info: PanInfo) => {
@@ -198,19 +218,22 @@ export function DictionaryModal({
             }}
             className="fixed bottom-0 left-0 right-0 z-[70] bg-white dark:bg-slate-800 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] max-h-[85vh] flex flex-col border-t border-slate-100 dark:border-slate-700"
           >
-            {/* 顶部拖拽手柄 (如果禁用拖拽，则只显示视觉条但不响应) */}
+            {/* 顶部拖拽手柄 (扩大判定区) */}
             <div 
-              className={`w-full flex justify-center pt-4 pb-2 ${disableDrag ? '' : 'cursor-grab active:cursor-grabbing'}`} 
+              className={`w-full flex justify-center pt-5 pb-4 touch-none ${disableDrag ? '' : 'cursor-grab active:cursor-grabbing'}`} 
+              onPointerDown={(e) => {
+                if (!disableDrag) dragControls.start(e);
+              }}
               onClick={() => onClose()}
             >
-              <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
+              <div className="w-16 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
             </div>
 
             {/* 关闭按钮 (右上角) */}
             <div className="absolute top-4 right-4 z-[80] cursor-pointer">
                <button 
                  type="button"
-                 onPointerDown={(e) => { e.stopPropagation(); }}
+                 onPointerDown={(e) => e.stopPropagation()}
                  onClick={(e) => { 
                     e.preventDefault();
                     e.stopPropagation(); 
@@ -223,7 +246,7 @@ export function DictionaryModal({
             </div>
 
             {/* 内容滚动区域 */}
-            <div className="p-6 overflow-y-auto pb-10 md:pb-6" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="p-6 overflow-y-auto pb-10 md:pb-6 touch-pan-y scroll-container overscroll-contain">
               {renderContent()}
             </div>
           </motion.div>

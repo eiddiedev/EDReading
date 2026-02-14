@@ -11,9 +11,10 @@ import { toast } from "sonner";
 interface PasteToReadModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
+export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModalProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [difficulty, setDifficulty] = useState<"Beginner" | "Intermediate" | "Advanced">("Intermediate");
@@ -90,14 +91,21 @@ export function PasteToReadModal({ isOpen, onClose }: PasteToReadModalProps) {
         tags: aiResult.tags,
       };
 
-      addArticle(newArticle, false);
+      // Task 1: Await addArticle to catch storage limit errors
+      await addArticle(newArticle, false);
+      
       setTitle("");
       setContent("");
       setDifficulty("Intermediate");
+      toast.success("导入成功");
+      onSuccess?.();
       onClose();
     } catch (error) {
       console.error("Import failed:", error);
-      toast.error("导入失败，请重试");
+      // toast is already handled in addArticle for limit errors, but generic ones might need it
+      if (error instanceof Error && !error.message.includes("文章库已满")) {
+          toast.error("导入失败，请重试");
+      }
     } finally {
       setIsAnalyzing(false);
     }

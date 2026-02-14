@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
-import { ADMIN_EMAIL } from "@/lib/constants";
+import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 
 // Simple in-memory cache for short-term rate limiting (1 minute)
 // Key: IP, Value: Timestamp of last request
@@ -22,7 +22,7 @@ export async function checkRateLimit(userId: string, endpoint: string = "analyze
         .eq('id', userId)
         .single();
       
-      if (profile && profile.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      if (profile && profile.email && ADMIN_EMAILS.includes(profile.email.toLowerCase())) {
         return { allowed: true };
       }
     } catch (e) {

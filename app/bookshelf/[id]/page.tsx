@@ -157,7 +157,7 @@ export default function BookReaderPage() {
       <button 
         type="button"
         onClick={() => router.back()} 
-        className="absolute top-4 left-4 z-50 bg-white/90 dark:bg-slate-800/90 p-2 rounded-full shadow-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all"
+        className="absolute top-4 left-16 z-50 bg-white/90 dark:bg-slate-800/90 p-2 rounded-full shadow-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all"
       > 
         <span className="text-xl font-bold">←</span>
       </button>
