@@ -1,5 +1,5 @@
 import { DictionaryResult, SentenceAnalysis } from "@/types";
-
+//123
 export async function analyzeTextForPhrases(text: string): Promise<string[]> {
   try {
     const response = await fetch("/api/ai", {
