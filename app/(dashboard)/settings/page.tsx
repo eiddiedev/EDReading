@@ -563,7 +563,7 @@ export default function SettingsPage() {
                     </div>
                  ))}
               </div>
-
+              {/* Footer */}
               <div className="border-t border-slate-100 dark:border-slate-700 pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-slate-400 gap-2">
                 <span>设计与开发: <strong className="text-slate-600 dark:text-slate-300">Eiddie & TL</strong></span>
                 <span>技术支持: DeepSeek V3.2 & Supabase</span>
