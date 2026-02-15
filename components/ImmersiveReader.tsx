@@ -1,5 +1,5 @@
 "use client";
-
+// 沉浸式阅读器组件
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { DictionaryResult, AIVocabulary } from "@/types";
 import { lookupWord, analyzeSentence } from "@/lib/dictionary";
