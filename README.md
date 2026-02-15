@@ -29,32 +29,40 @@ EDReading 是一款面向雅思阅读场景的英语阅读与词汇记忆应用�
 ```
 app/
   (dashboard)/
-    ai-hub/       # AI 工具集合
-    bookshelf/    # 书架
-    library/      # 资料库
-    notebook/     # 生词/复习
-    portal/       # 外链门户
-    reader/[id]/  # 阅读器页
-    settings/     # 设置
+    ai-hub/       # AI 工具集合页面
+    bookshelf/    # 电子书架页面
+    library/      # 文章资料库页面
+    notebook/     # 生词本/复习页面
+    portal/       # 外链门户/RSS聚合
+    reader/[id]/  # 核心阅读器页面
+    settings/     # 设置与关于
     layout.tsx    # 仪表盘布局（侧边栏/底栏/公告）
   api/
-    ai/route.ts                 # 统一 AI 本地兜底接口
+    ai/route.ts                 # 统一 AI 接口（含本地兜底逻辑）
     analyze-selection/route.ts  # 查词/短语/句子分析（带 Supabase 缓存）
+    chat/route.ts               # AI 对话接口
+    ...                         # 其他业务接口
 components/
-  EpubReader.tsx           # EPUB 阅读器（移动端点击取词/长句分析入口）
-  ImmersiveReader.tsx
-  DictionaryModal.tsx 等
+  EpubReader.tsx           # EPUB 阅读器（核心组件，处理点击/选区）
+  ImmersiveReader.tsx      # 沉浸式文章阅读器
+  DictionaryModal.tsx      # 查词结果弹窗
+  AnalysisModal.tsx        # 句子分析弹窗
+  Navigation/              # 导航组件（Sidebar, BottomTab）
+  notebook/                # 复习/生词本相关组件
 lib/
   store.ts                  # Zustand 根 store
-  stores/*.ts               # 各功能 slice
-  ai.ts                     # 前端调用 /api/ai 的便捷函数
-  local-dictionary.ts       # 本地高频/学术词库（秒开）
-  utils/srs.ts              # 复习间隔计算
-  supabase.ts               # Supabase 客户端
+  stores/*.ts               # 各功能 slice (auth, article, review, settings)
+  ai.ts                     # 前端 AI 调用封装
+  local-dictionary.ts       # 本地高频/学术词库（秒开优化）
+  utils/srs.ts              # 间隔重复算法 (SRS) 实现
+  supabase.ts               # Supabase 客户端配置
   safety.ts                 # 内容安全检查
+hooks/
+  useHaptic.ts              # 触觉反馈 Hook
+  useArticles.ts            # 文章数据管理 Hook
 supabase/
-  migrations/*.sql          # 数据表/索引/RLS/限流迁移脚本
-public/                     # 图标与捐助二维码
+  migrations/*.sql          # 数据库迁移脚本（表结构、RLS、索引）
+public/                     # 静态资源
 ```
 
 ## 快速开始
@@ -126,6 +134,31 @@ npm start
 - `npm start`：启动生产服务
 - `npm run lint`：运行 ESLint（构建阶段忽略错误）
 
+## 故障排除 (Troubleshooting)
+
+### 1. Supabase 连接问题
+- **现象**: 登录失败、数据无法加载或提示 "Auth session missing"。
+- **检查**:
+  - 确认 `.env.local` 中 `NEXT_PUBLIC_SUPABASE_URL` 和 `NEXT_PUBLIC_SUPABASE_ANON_KEY` 正确无误。
+  - 检查网络连接，Supabase 客户端设置了 15 秒超时 (`lib/supabase.ts`)。
+  - 确保 Supabase 项目处于 "Active" 状态且未暂停。
+
+### 2. AI 功能显示 "Fallback" 或 "模拟结果"
+- **现象**: 查词/分析结果简单，包含 "[Fallback]" 或 "[AI Key Missing]" 字样。
+- **原因**: 未配置有效的 AI API Key，系统自动降级到本地 NLP (Compromise) 模式。
+- **解决**:
+  - 检查 `.env.local` 是否配置了 `AI_API_KEY` (OpenAI) 或 `DEEPSEEK_API_KEY`。
+  - 确认 API Key 余额充足且未过期。
+  - 确认 `AI_BASE_URL` 和 `AI_MODEL` 配置正确。
+
+### 3. 触觉反馈 (Haptics) 不工作
+- **现象**: 移动端操作（如长按、点击）无震动反馈。
+- **原因**: 触觉反馈依赖 `navigator.vibrate` API，通常仅在移动设备（手机/平板）上可用。
+- **解决**:
+  - 这是一个预期行为，桌面浏览器通常不支持震动。
+  - 检查手机系统设置是否开启了震动/触觉反馈。
+  - 某些浏览器（如 iOS Safari）对 `vibrate` 支持有限或需要用户交互触发。
+
 ## 环境变量说明
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`：客户端与 SSR 会话/数据访问
@@ -150,4 +183,3 @@ npm start
 ## 贡献与反馈
 
 欢迎提交 Issue 或 PR 来帮助改进 EDReading。对于功能建议、Bug 反馈与文档补充，均非常欢迎。
-

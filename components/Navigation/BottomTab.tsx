@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, BookMarked, Settings, Library, Sparkles, Compass } from "lucide-react";
+import { useHaptic } from "@/hooks/useHaptic";
 
 export function BottomTab() {
   const pathname = usePathname();
+  const { triggerHaptic } = useHaptic();
 
   const tabs = [
     { href: "/library", icon: Library, label: "文库" },
@@ -26,6 +28,7 @@ export function BottomTab() {
             <Link
               key={tab.href}
               href={tab.href}
+              onClick={triggerHaptic}
               className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
                 isActive
                   ? "text-primary-600 dark:text-primary-400"

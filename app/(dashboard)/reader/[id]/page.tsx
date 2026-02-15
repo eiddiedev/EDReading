@@ -2,14 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useAppStore } from "@/lib/store";
 import { ImmersiveReader } from "@/components/ImmersiveReader";
-import { EpubReader } from "@/components/EpubReader";
+import { useHaptic } from "@/hooks/useHaptic";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Article } from "@/types";
 import { getBook, getBookFile, updateBookProgress } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { triggerHaptic } from "@/lib/utils";
+
+const EpubReader = dynamic(() => import("@/components/EpubReader").then((mod) => mod.EpubReader), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center py-20">
+      <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-500 dark:text-slate-400">Loading reader...</p>
+    </div>
+  ),
+});
 
 export default function ReaderPage() {
   const params = useParams();
@@ -206,6 +218,7 @@ export default function ReaderPage() {
   }, [router]);
 
   const handleBack = () => {
+    triggerHaptic();
     router.back();
   };
 

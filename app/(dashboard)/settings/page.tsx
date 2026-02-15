@@ -565,7 +565,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="border-t border-slate-100 dark:border-slate-700 pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-slate-400 gap-2">
-                <span>设计与开发: <strong className="text-slate-600 dark:text-slate-300">Eiddie</strong></span>
+                <span>设计与开发: <strong className="text-slate-600 dark:text-slate-300">Eiddie & TL</strong></span>
                 <span>技术支持: DeepSeek V3.2 & Supabase</span>
               </div>
             </motion.div>
@@ -640,7 +640,7 @@ export default function SettingsPage() {
                 }}
                 className="text-xs text-slate-400 hover:text-slate-500 dark:hover:text-slate-300 transition-colors"
               >
-                EDReading {APP_VERSION} ({APP_STAGE}) · Made with ❤️ by Eiddie
+                EDReading {APP_VERSION} ({APP_STAGE}) · Made with ❤️ by Eiddie & TL
               </button>
             </div>
           </div>
