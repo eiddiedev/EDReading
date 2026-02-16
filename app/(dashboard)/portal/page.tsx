@@ -1,3 +1,6 @@
+/**
+ * 传送门页面，允许用户管理外部链接，支持在应用内 iframe 打开或新标签页打开。
+ */
 "use client";
 
 import { useState, useEffect } from "react";

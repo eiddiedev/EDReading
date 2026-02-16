@@ -1,3 +1,12 @@
+/**
+ * 文章提取 API (Extract Article)
+ * 作用：抓取并解析指定 URL 的网页内容，用于导入文章。
+ * 定义：POST 接口，接收 URL。
+ * 逻辑：
+ * 1. 模拟浏览器 User-Agent 请求目标网页 HTML。
+ * 2. 使用 `jsdom` 和 `@mozilla/readability` 解析 HTML，提取正文、标题和纯文本。
+ * 3. 返回清洗后的文章数据。
+ */
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { NextResponse } from 'next/server';

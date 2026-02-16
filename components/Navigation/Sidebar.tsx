@@ -1,3 +1,6 @@
+/**
+ * 桌面端侧边导航栏组件，包含 Logo 展示和主要功能页面的导航链接。
+ */
 "use client";
 
 import Link from "next/link";

@@ -1,3 +1,13 @@
+/**
+ * 速率限制工具 (Rate Limiter)
+ * 作用：防止 API 被滥用，控制用户和 IP 的请求频率。
+ * 定义：基于内存缓存和数据库记录的混合限流策略。
+ * 逻辑：
+ * 1. 白名单检查：管理员账号免限流。
+ * 2. 短期限流：内存 Map 记录 IP，限制 1 分钟内的频繁请求。
+ * 3. 长期限流：查询 Supabase `api_usage_logs` 表，限制每日请求次数。
+ * 4. 记录每次合法的 API 调用到数据库。
+ */
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";

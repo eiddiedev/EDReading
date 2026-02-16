@@ -1,3 +1,13 @@
+/**
+ * Supabase 代理/中间件逻辑 (Proxy)
+ * 作用：处理服务端认证 Token 的刷新和 Cookie 管理。
+ * 定义：Next.js 中间件逻辑函数。
+ * 逻辑：
+ * 1. 创建 Supabase 服务端客户端。
+ * 2. 拦截请求，检查 Auth Token 有效性。
+ * 3. 如果 Token 过期，自动刷新并更新 Response 中的 Cookie。
+ * 4. 确保服务端组件能获取到有效的用户会话。
+ */
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 

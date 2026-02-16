@@ -1,3 +1,6 @@
+/**
+ * 单词本页面，用于管理生词、进行 SRS 间隔复习和 AI 批量处理单词。
+ */
 "use client";
 
 import { useState, useEffect } from "react";

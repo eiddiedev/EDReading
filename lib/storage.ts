@@ -1,3 +1,13 @@
+/**
+ * IndexedDB 存储工具 (Storage)
+ * 作用：管理浏览器端的 IndexedDB 数据库，用于存储大文件和离线数据。
+ * 定义：基于 `idb` 库封装的数据库操作函数。
+ * 逻辑：
+ * 1. 初始化 `ai-hub-library` 数据库，包含书籍元数据、文件内容和文章三个 Store。
+ * 2. 提供书籍文件的存取 (`saveBookFile`, `getBookFile`)。
+ * 3. 提供文章和进度的持久化操作。
+ * 4. 支持大容量数据的离线存储，弥补 LocalStorage 的不足。
+ */
 import { openDB } from 'idb';
 import { Article } from "@/types";
 

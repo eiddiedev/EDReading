@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * 简易词典模态框组件 (SimpleDictionaryModal)
+ * 作用：提供一个轻量级的单词查询界面，用于快速查看释义。
+ * 定义：DictionaryModal 的简化版本，去除了一些复杂交互。
+ * 逻辑：
+ * 1. 接收单词作为输入。
+ * 2. 调用字典 API 获取基础释义。
+ * 3. 弹窗展示结果，关闭即销毁。
+ */
 import { useEffect, useState } from "react";
 import { X, Plus, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";

@@ -1,3 +1,12 @@
+/**
+ * 内容安全工具 (Content Safety)
+ * 作用：检测和过滤敏感内容，确保应用合规。
+ * 定义：包含敏感词检测和信息脱敏函数。
+ * 逻辑：
+ * 1. `checkContentSafety`: 基于本地敏感词库 (`sensitive-data.json`) 检测文本。
+ * 2. 支持中英文不同匹配策略（英文全词匹配，中文包含匹配）。
+ * 3. `maskSensitiveInfo`: 对敏感字符串进行打码处理。
+ */
 import sensitiveWords from './sensitive-data.json';
 
 // 硬编码的高危词 + 本地词库

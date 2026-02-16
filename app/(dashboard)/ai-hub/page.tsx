@@ -1,6 +1,9 @@
+/**
+ * AI 中心页面，提供外刊精选推荐、文章导入分析和 AI 助手对话功能。
+ */
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Sparkles, Loader2, Save, Globe, Clock, RefreshCw, ExternalLink, Send } from "lucide-react";
 import { analyzeArticleWithAI } from "@/app/actions";
 import { useAppStore } from "@/lib/store";
@@ -74,6 +77,24 @@ export default function AIHubPage() {
   const remainingChat = Math.max(0, 100 - dailyUsage.chat);
   const remainingFeeds = Math.max(0, 5 - (dailyUsage.feedRefresh || 0));
 
+  const handleRefresh = useCallback(async () => {
+    if (!(await checkFeedRefreshQuota())) return;
+    setIsRefreshing(true);
+    try {
+      const res = await fetch("/api/feeds");
+      const data = await res.json();
+      setRecommendations(data.items || []);
+      const now = Date.now();
+      setLastUpdated(now);
+      localStorage.setItem("cached_recommendations_v2", JSON.stringify(data.items));
+      localStorage.setItem("last_curation_time_v2", now.toString());
+    } catch (e) {
+      toast.error("获取外刊失败");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [checkFeedRefreshQuota]);
+
   useEffect(() => {
     ensureDailyUsage();
     const storedTime = localStorage.getItem("last_curation_time_v2");
@@ -106,7 +127,7 @@ export default function AIHubPage() {
     if (!storedRecs) {
       handleRefresh();
     }
-  }, [ensureDailyUsage]);
+  }, [ensureDailyUsage, handleRefresh]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -256,24 +277,6 @@ export default function AIHubPage() {
       toast.success("已存入文库");
     } catch (error) {
       return;
-    }
-  };
-
-  const handleRefresh = async () => {
-    if (!(await checkFeedRefreshQuota())) return;
-    setIsRefreshing(true);
-    try {
-      const res = await fetch("/api/feeds");
-      const data = await res.json();
-      setRecommendations(data.items || []);
-      const now = Date.now();
-      setLastUpdated(now);
-      localStorage.setItem("cached_recommendations_v2", JSON.stringify(data.items));
-      localStorage.setItem("last_curation_time_v2", now.toString());
-    } catch (e) {
-      toast.error("获取外刊失败");
-    } finally {
-      setIsRefreshing(false);
     }
   };
 

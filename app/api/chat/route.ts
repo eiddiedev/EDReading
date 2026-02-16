@@ -1,3 +1,6 @@
+/**
+ * AI 助手的聊天对话 API 路由，预设了英语教学专家的系统提示词，处理用户的英语学习咨询，包含安全检查和速率限制。
+ */
 import { NextResponse } from 'next/server';
 import { checkContentSafety } from "@/lib/safety";
 

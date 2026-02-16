@@ -1,3 +1,11 @@
+/**
+ * 字典例句翻译库 (Dictionary Translations)
+ * 作用：为字典中的常用例句提供预置的中文翻译。
+ * 定义：包含一个简单的键值对映射对象 `exampleTranslations`。
+ * 逻辑：
+ * 1. 键为英文例句，值为中文翻译。
+ * 2. 用于在离线或 API 未返回翻译时，提供高质量的人工翻译兜底。
+ */
 // 例句中文翻译映射表
 export const exampleTranslations: Record<string, string> = {
   "The book is on the table.": "书在桌子上。",

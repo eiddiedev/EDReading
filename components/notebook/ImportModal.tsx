@@ -1,3 +1,6 @@
+/**
+ * 单词导入模态框，支持用户粘贴文本批量导入生词，并进行去重处理。
+ */
 "use client";
 
 import { useState } from "react";

@@ -1,3 +1,12 @@
+/**
+ * 会话监听器组件 (SessionListener)
+ * 作用：全局监听用户认证会话状态的变化。
+ * 定义：一个无 UI 的逻辑组件，通常挂载在根布局中。
+ * 逻辑：
+ * 1. 使用 Supabase `onAuthStateChange` 监听登录、登出、Token 刷新等事件。
+ * 2. 当会话过期或用户登出时，执行清理操作（如清除本地状态、跳转登录页）。
+ * 3. 同步服务端和客户端的会话状态。
+ */
 "use client";
 
 import { useEffect, useRef } from "react";

@@ -1,3 +1,14 @@
+/**
+ * 文章状态切片 (Article Slice)
+ * 作用：管理文章的增删改查、公共库浏览及阅读进度。
+ * 定义：Zustand Store 的核心部分，包含大量业务逻辑。
+ * 逻辑：
+ * 1. `fetchPublicArticles`: 获取公共文章流，支持缓存（5分钟）。
+ * 2. `addArticle`: 添加文章到个人库，包含 Pro 用户配额检查和云端同步。
+ * 3. `removeArticle`: 删除文章，同步处理云端、本地状态和 IndexedDB。
+ * 4. `markAsRead` / `toggleReadStatus`: 更新阅读状态。
+ * 5. 维护分页状态 (`pagedArticles`) 以支持无限滚动。
+ */
 import { StateCreator } from "zustand";
 import { AppState, ArticleSlice } from "./types";
 import { supabase } from "@/lib/supabase";

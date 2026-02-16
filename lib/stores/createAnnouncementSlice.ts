@@ -1,3 +1,13 @@
+/**
+ * 公告状态切片 (Announcement Slice)
+ * 作用：管理系统公告的获取、发布和关闭状态。
+ * 定义：Zustand Store 的一部分，处理 Announcement 相关逻辑。
+ * 逻辑：
+ * 1. `fetchAnnouncement`: 获取最新的活跃公告，检查本地是否已关闭。
+ * 2. `publishAnnouncement`: 管理员发布新公告（需鉴权）。
+ * 3. `revokeAllAnnouncements`: 管理员撤销所有公告。
+ * 4. `closeAnnouncement`: 用户关闭公告，记录 ID 到 LocalStorage。
+ */
 import { StateCreator } from "zustand";
 import { AppState, AnnouncementSlice } from "./types";
 import { supabase } from "@/lib/supabase";

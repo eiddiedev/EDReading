@@ -1,3 +1,14 @@
+/**
+ * 复习状态切片 (Review Slice)
+ * 作用：管理 SRS（间隔重复系统）复习单词的逻辑。
+ * 定义：Zustand Store 的一部分，处理 Vocabulary 数据。
+ * 逻辑：
+ * 1. `addVocabulary`: 添加生词，初始化 SRS 状态。
+ * 2. `submitReviewResult`: 提交复习结果，调用 `srs.ts` 计算下次复习时间。
+ * 3. `fetchReviewItems`: 获取当前需要复习的单词列表。
+ * 4. `markAsMastered`: 标记单词为“已掌握”，不再复习。
+ * 5. 实时同步所有变更到 Supabase。
+ */
 import { StateCreator } from "zustand";
 import { ReviewSlice, AppState } from "./types";
 import { supabase } from "@/lib/supabase";

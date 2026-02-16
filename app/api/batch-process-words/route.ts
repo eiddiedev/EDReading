@@ -1,3 +1,6 @@
+/**
+ * 批量处理单词的 API 路由，用于生成单词列表的详细字典数据（包括音标、释义、例句等），主要用于导入单词功能。
+ */
 import { NextResponse } from "next/server";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || process.env.AI_API_KEY;

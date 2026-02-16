@@ -1,3 +1,13 @@
+/**
+ * AI 辅助工具 (AI Utilities)
+ * 作用：提供前端调用的 AI 辅助功能，如短语提取、句子分析和单词查询。
+ * 定义：封装了对后端 `/api/ai` 路由的 fetch 调用。
+ * 逻辑：
+ * 1. `analyzeTextForPhrases`: 调用 API 提取文本中的关键短语。
+ * 2. `analyzeSentenceAI`: 调用 API 分析长难句结构。
+ * 3. `lookupWordAI`: 调用 API 进行 AI 增强的单词查询。
+ * 4. 处理网络请求错误并提供默认返回值。
+ */
 import { DictionaryResult, SentenceAnalysis } from "@/types";
 //123
 export async function analyzeTextForPhrases(text: string): Promise<string[]> {

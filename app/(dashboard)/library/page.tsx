@@ -1,3 +1,6 @@
+/**
+ * 文库页面，展示用户收藏的文章和发现公共文章，支持 AI 生成文章、文章管理和分页加载。
+ */
 "use client";
 
 import { useEffect, useMemo, useState, useCallback, useLayoutEffect } from "react";

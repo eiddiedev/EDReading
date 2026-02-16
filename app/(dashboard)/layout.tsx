@@ -1,3 +1,6 @@
+/**
+ * 仪表盘布局组件，包含侧边栏、底部导航栏和全局公告，处理用户会话检查和每日配额初始化。
+ */
 "use client";
 
 import { Sidebar } from "@/components/Navigation/Sidebar";

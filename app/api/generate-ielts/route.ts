@@ -1,3 +1,6 @@
+/**
+ * 生成雅思/托福阅读文章的 API 路由，根据用户选择的主题和难度，利用 AI 生成符合考试标准的学术文章，包含智能选题和缓存机制。
+ */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkContentSafety } from '@/lib/safety';

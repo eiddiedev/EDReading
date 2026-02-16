@@ -1,4 +1,14 @@
-import React from 'react';
+/**
+ * Logo 组件 (Logo)
+ * 作用：显示应用的品牌标识，通常用于导航栏或页脚。
+ * 定义：包含图标和应用名称的组合组件。
+ * 逻辑：
+ * 1. 渲染 BookOpen 图标和 "EDReading" 文本。
+ * 2. 作为一个 Link 组件，点击可导航至首页。
+ * 3. 支持通过 className 自定义样式。
+ */
+import Link from "next/link";
+import { BookOpen } from "lucide-react";
 
 export const Logo = ({ className = "w-full h-auto" }: { className?: string }) => {
   return (

@@ -1,3 +1,12 @@
+/**
+ * 本地词典 (Local Dictionary)
+ * 作用：提供无需网络的极速单词查询服务，覆盖高频基础词汇。
+ * 定义：包含精简版词库 `RAW_DICT` 和查询函数 `lookupLocal`。
+ * 逻辑：
+ * 1. 存储约 300 个最常用的英语单词（基础词+雅思核心词）的简明释义。
+ * 2. 格式化存储为 "释义|音标|标签|翻译" 字符串以压缩体积。
+ * 3. `lookupLocal`: 解析存储格式，返回标准化的 DictionaryResult 对象。
+ */
 // lib/local-dictionary.ts
 
 // 1. Helper to normalize keys (ignore case/punctuation)

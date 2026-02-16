@@ -1,3 +1,6 @@
+/**
+ * 捐赠支付模态框，展示微信支付和支付宝的收款码。
+ */
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check } from 'lucide-react';

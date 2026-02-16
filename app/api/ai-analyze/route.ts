@@ -1,3 +1,6 @@
+/**
+ * 处理文章 AI 深度分析的 API 路由，支持通过哈希缓存结果、敏感词过滤、速率限制，并调用 DeepSeek API 生成文章的词汇、短语和句子分析。
+ */
 import { NextResponse } from "next/server";
 import { checkContentSafety } from "@/lib/safety";
 import { createClient } from "@supabase/supabase-js";

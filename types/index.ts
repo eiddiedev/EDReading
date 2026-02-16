@@ -1,3 +1,9 @@
+/**
+ * 全局类型定义 (Types)
+ * 作用：定义项目中通用的数据结构和接口，确保类型安全。
+ * 定义：包含文章、词汇、AI 分析结果、字典条目等核心实体的 TypeScript 接口。
+ * 逻辑：纯类型定义文件，无运行时逻辑。被项目各处引用以规范数据格式。
+ */
 
 /**
  * 代表特定句子的结构分析笔记。
@@ -115,9 +121,25 @@ export interface VocabularyWord {
 /**
  * 代表字典查询的结果。
  */
+export interface DictionaryMeaning {
+  partOfSpeech: string;
+  definitions: {
+    definition: string;
+    example?: string;
+  }[];
+}
+
 export interface DictionaryResult {
   word: string;
   phonetic?: string;
+  audio?: string; // 音频链接
+  cnDefinition?: string; // 中文简明翻译
+  meanings?: DictionaryMeaning[]; // 英文释义列表
+  examples?: { // 额外例句列表
+    sentence: string;
+    translation?: string;
+  }[];
+  
   definition: string;
   usage?: string;
   example?: string;

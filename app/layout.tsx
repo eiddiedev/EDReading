@@ -1,3 +1,6 @@
+/**
+ * 定义应用的根布局，包含字体设置、主题提供者、会话监听器和全局 Toast 提示。
+ */
 import type { Metadata, Viewport } from "next";
 import { Inter, Merriweather } from "next/font/google";
 import "@/app/globals.css";

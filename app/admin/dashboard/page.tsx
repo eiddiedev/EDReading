@@ -1,3 +1,6 @@
+/**
+ * 管理员仪表盘页面，显示系统状态和环境信息（当前功能正在开发中）。
+ */
 "use client";
 
 import { motion } from "framer-motion";

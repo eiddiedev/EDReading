@@ -1,3 +1,12 @@
+/**
+ * AI 单词卡片生成 API (Card Gen)
+ * 作用：为指定单词生成高质量、语境丰富的例句和翻译。
+ * 定义：POST 接口，接收单词和定义。
+ * 逻辑：
+ * 1. 构造 Prompt，要求 AI 模仿《经济学人》风格生成例句。
+ * 2. 调用 AI 接口获取 JSON 格式的例句和翻译。
+ * 3. 返回生成结果供前端展示。
+ */
 import { NextResponse } from "next/server";
 
 const AI_API_KEY = process.env.AI_API_KEY;

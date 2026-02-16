@@ -1,3 +1,13 @@
+/**
+ * AI 处理器 (AI Processor)
+ * 作用：处理核心的 AI 文本分析、翻译和内容生成任务。
+ * 定义：包含与 DeepSeek API 交互的函数集合。
+ * 逻辑：
+ * 1. `processTextWithAI`: 发送文本到 AI，获取结构化的分析结果（词汇、句子结构、标签等）。
+ * 2. `batchTranslateTitles`: 批量翻译文章标题。
+ * 3. `curateFeedWithAI`: 筛选和推荐高质量的 RSS 文章。
+ * 4. 包含系统提示词 (System Prompts) 工程和 JSON 响应解析/容错处理。
+ */
 import { AIVocabulary, AISentence } from "@/types";
 
 export interface AIProcessResult {

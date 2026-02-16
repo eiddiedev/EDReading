@@ -1,3 +1,6 @@
+/**
+ * RSS 订阅源聚合 API 路由，从多个高质量英语来源获取文章，混合、过滤并使用 AI 翻译标题，提供每日外刊推荐。
+ */
 import { NextResponse } from 'next/server';
 import { batchTranslateTitles } from '@/lib/ai-processor';
 import { checkContentSafety } from "@/lib/safety";
@@ -12,7 +15,7 @@ const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
  * @route GET /api/feeds
  * @returns {object} 包含订阅文章数组 "items" 的 JSON 对象
  */
-export async function GET() {
+const SOURCES = [
   // --- 1. High Level (IELTS/TOEFL/Postgrad High) ---
   { 
     name: "The Economist", 

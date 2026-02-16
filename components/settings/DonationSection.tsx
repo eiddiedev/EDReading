@@ -1,3 +1,6 @@
+/**
+ * 捐赠选项展示组件，列出不同的捐赠档位和说明，鼓励用户支持开发者。
+ */
 import React, { useState } from 'react';
 import { DonationModal } from './DonationModal';
 import { motion } from 'framer-motion';

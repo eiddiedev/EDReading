@@ -62,6 +62,6 @@ next-env.d.ts
 *.njsproj
 *.sln
 *.sw?
-
+.trae
 # Supabase
 supabase/.temp

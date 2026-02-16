@@ -1,3 +1,6 @@
+/**
+ * 文章卡片组件，展示文章标题、难度标签、词数和阅读状态，支持删除和加入文库操作。
+ */
 "use client";
 
 import Link from "next/link";

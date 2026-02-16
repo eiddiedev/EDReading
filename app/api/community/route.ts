@@ -1,3 +1,11 @@
+/**
+ * 社区文章 API (Community)
+ * 作用：获取公共社区的高质量文章列表，以及管理员删除文章。
+ * 定义：GET (获取列表) 和 DELETE (管理员删除) 接口。
+ * 逻辑：
+ * 1. GET: 查询 Supabase `articles` 表中 `is_public=true` 的文章，按时间倒序排列。
+ * 2. DELETE: 验证管理员权限，软删除（取消公开）并硬删除文章记录。
+ */
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";

@@ -1,3 +1,13 @@
+/**
+ * 认证状态切片 (Auth Slice)
+ * 作用：管理用户登录状态、设备指纹及每日配额。
+ * 定义：Zustand Store 的一部分，处理 Auth 和 Quota。
+ * 逻辑：
+ * 1. `setUser` / `logout`: 管理 Supabase 用户会话。
+ * 2. `ensureDeviceId`: 生成或获取设备指纹，用于游客限流。
+ * 3. `check...Quota`: 检查生成、导入、对话等操作的每日剩余额度。
+ * 4. `scheduleMidnightReset`: 自动在午夜重置本地配额计数。
+ */
 import { StateCreator } from "zustand";
 import { AppState, AuthSlice } from "./types";
 import { supabase } from "@/lib/supabase";

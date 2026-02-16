@@ -1,3 +1,6 @@
+/**
+ * 管理员后台布局组件，执行严格的权限检查，确保只有授权的管理员邮箱可以访问后台页面。
+ */
 "use client";
 
 import { useEffect, useState } from "react";

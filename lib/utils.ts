@@ -1,3 +1,11 @@
+/**
+ * 通用工具函数 (Utils)
+ * 作用：提供项目中常用的辅助函数，如样式合并。
+ * 定义：包含 `cn` (Class Name) 合并函数等。
+ * 逻辑：
+ * 1. `cn`: 结合 `clsx` 和 `tailwind-merge`，用于动态且安全地合并 Tailwind 类名。
+ * 2. `triggerHaptic`: 封装震动反馈逻辑（同 useHaptic，但作为普通函数导出）。
+ */
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 

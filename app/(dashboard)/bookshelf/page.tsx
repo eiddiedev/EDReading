@@ -1,3 +1,6 @@
+/**
+ * 书架页面，用于管理和阅读本地 EPUB 电子书，支持导入、封面解析和阅读进度追踪。
+ */
 "use client";
 
 import { useState, useEffect, useRef } from "react";

@@ -1,3 +1,6 @@
+/**
+ * 沉浸式阅读器页面，支持文章和 EPUB 电子书的阅读，集成点读查词、阅读进度保存和手势操作功能。
+ */
 "use client";
 
 import { useEffect, useRef, useState } from "react";

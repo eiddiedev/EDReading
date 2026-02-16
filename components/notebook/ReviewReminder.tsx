@@ -1,3 +1,6 @@
+/**
+ * 复习提醒组件，基于艾宾浩斯遗忘曲线显示今日待复习和已复习的单词数量。
+ */
 import { useState, useEffect, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { ReviewSession } from "@/components/notebook/ReviewSession";

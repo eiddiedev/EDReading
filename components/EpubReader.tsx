@@ -1,3 +1,12 @@
+/**
+ * EPUB 阅读器组件 (EpubReader)
+ * 作用：用于渲染和交互 EPUB 格式的电子书。
+ * 定义：基于 `react-reader` 库封装的阅读器组件。
+ * 逻辑：
+ * 1. 加载 EPUB 文件内容，支持章节跳转、字体大小调整、主题切换。
+ * 2. 监听文本选中事件，触发划词翻译或笔记功能。
+ * 3. 记录阅读进度（location），确保持久化阅读状态。
+ */
 "use client";
 
 import { useEffect, useRef, useState } from "react";

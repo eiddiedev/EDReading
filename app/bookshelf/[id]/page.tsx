@@ -1,3 +1,13 @@
+/**
+ * 书籍阅读页面 (BookReaderPage)
+ * 作用：加载并渲染特定 ID 的电子书。
+ * 定义：动态路由页面，用于阅读导入的书籍。
+ * 逻辑：
+ * 1. 根据 URL 参数 ID 从 IndexedDB 加载书籍文件和元数据。
+ * 2. 渲染 EpubReader 组件进行阅读。
+ * 3. 处理手势返回（左滑退出）和键盘快捷键。
+ * 4. 实时保存阅读进度。
+ */
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { getBook, getBookFile, getAllBooks, updateBookProgress } from '@/lib/storage';

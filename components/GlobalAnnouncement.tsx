@@ -1,6 +1,15 @@
+/**
+ * 全局公告组件 (GlobalAnnouncement)
+ * 作用：在应用顶部显示重要的系统通知或更新信息。
+ * 定义：一个可关闭的顶部横幅组件。
+ * 逻辑：
+ * 1. 检查本地存储或会话状态，判断用户是否已关闭公告。
+ * 2. 如果未关闭，显示配置的公告内容。
+ * 3. 点击关闭后更新状态，避免重复显示。
+ */
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { X, AlertTriangle, Info, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";

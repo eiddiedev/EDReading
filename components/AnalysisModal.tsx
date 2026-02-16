@@ -1,3 +1,6 @@
+/**
+ * 句子语法分析模态框，展示 AI 对选中句子的中文翻译、语法结构解析和重点词汇。
+ */
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";

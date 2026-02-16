@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+/**
+ * 单词卡片模态框组件 (WordCardModal)
+ * 作用：展示单个单词的详细复习卡片，支持发音和从生词本移除。
+ * 定义：用于单词复习或详情查看的 UI 组件。
+ * 逻辑：
+ * 1. 从 Props 接收单词对象（包含拼写、音标、释义、例句等）。
+ * 2. 提供发音播放功能。
+ * 3. 提供“移除”按钮，调用 `wordStore` 从生词本中删除该词。
+ */
 import { X, Share2, Download, Loader2, Quote } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";

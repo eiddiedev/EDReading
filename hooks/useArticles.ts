@@ -1,3 +1,13 @@
+/**
+ * 文章管理 Hook (useArticles)
+ * 作用：封装文章列表的获取、分页加载、刷新及缓存逻辑。
+ * 定义：自定义 React Hook，结合 Zustand store 使用。
+ * 逻辑：
+ * 1. 从 Supabase 获取文章列表，支持分页和筛选。
+ * 2. 维护加载状态 (isLoading) 和总数 (totalCount)。
+ * 3. 将获取的数据同步到全局 Store (`pagedArticles`) 以实现持久化和缓存。
+ * 4. 提供 loadMore 和 refresh 方法供 UI 调用。
+ */
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Article } from "@/types";

@@ -1,3 +1,6 @@
+/**
+ * 仪表盘页面的动画模板，为页面切换提供淡入上浮的过渡效果。
+ */
 'use client';
 
 import { motion } from 'framer-motion';

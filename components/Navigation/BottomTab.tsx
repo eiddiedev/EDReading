@@ -1,3 +1,6 @@
+/**
+ * 移动端底部导航栏组件，提供主要功能页面的快速切换导航。
+ */
 "use client";
 
 import Link from "next/link";

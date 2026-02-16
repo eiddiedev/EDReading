@@ -1,3 +1,6 @@
+/**
+ * 服务器端 Server Actions，处理文章 AI 分析的核心逻辑，包括缓存策略、内容安全检查、速率限制和调用 DeepSeek API。
+ */
 "use server";
 
 import { checkContentSafety } from "@/lib/safety";

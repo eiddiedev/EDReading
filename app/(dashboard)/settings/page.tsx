@@ -1,3 +1,6 @@
+/**
+ * 用户设置页面，提供账户管理（登录/注册）、数据云端同步、暗色模式切换、字体调整、管理员入口和关于信息。
+ */
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";

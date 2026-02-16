@@ -1,7 +1,16 @@
 "use client";
 
+/**
+ * 词典模态框组件 (DictionaryModal)
+ * 作用：在阅读过程中提供单词查询、发音播放、例句展示及添加到生词本的功能。
+ * 定义：包含单词定义、音标、例句、翻译等多维度的词汇信息展示界面。
+ * 逻辑：
+ * 1. 接收查询词汇，调用词典 API 获取详情。
+ * 2. 展示音标、释义、例句等信息。
+ * 3. 提供添加到生词本的交互，支持状态反馈（加载中、已添加）。
+ */
 import { useEffect, useState } from "react";
-import { Plus, X, Loader2, Check, Sparkles } from "lucide-react";
+import { Plus, X, Loader2, Check, Sparkles, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
 import { useAppStore } from "@/lib/store";
@@ -35,6 +44,23 @@ export function DictionaryModal({
       setIsSaved(exists);
     }
   }, [result, vocabulary]);
+
+  // 自动播放发音
+  useEffect(() => {
+    if (result?.audio) {
+      const audio = new Audio(result.audio);
+      audio.play().catch(() => {
+        // 忽略自动播放失败（通常是因为用户没有交互）
+      });
+    }
+  }, [result]);
+
+  const handlePlayAudio = () => {
+    if (result?.audio) {
+      const audio = new Audio(result.audio);
+      audio.play().catch(e => console.error("Play failed", e));
+    }
+  };
 
   // 只要有结果或者正在加载，就视为打开状态
   const isOpen = !!result || isLoading;
@@ -80,6 +106,8 @@ export function DictionaryModal({
 
     if (!result) return null;
 
+    const hasMeanings = result.meanings && result.meanings.length > 0;
+
     return (
       <>
         {/* 单词头部 (可拖拽区域) */}
@@ -89,16 +117,34 @@ export function DictionaryModal({
             if (!disableDrag) dragControls.start(e);
           }}
         >
-          <div className="flex items-baseline gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-2">
             <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100">
               {result.word}
             </h2>
+            
+            {result.audio && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); handlePlayAudio(); }}
+                className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-slate-600 dark:text-slate-300"
+                aria-label="Play pronunciation"
+              >
+                <Volume2 className="w-5 h-5" />
+              </button>
+            )}
+
             {result.phonetic && (
               <span className="text-slate-500 dark:text-slate-400 font-mono text-lg">
                 {result.phonetic}
               </span>
             )}
           </div>
+          
+          {/* 中文简明翻译 */}
+          {result.cnDefinition && (
+            <p className="text-lg text-slate-700 dark:text-slate-300 font-medium mb-3">
+              {result.cnDefinition}
+            </p>
+          )}
           
           <div className="flex flex-wrap gap-2">
              {result.tags?.map(tag => (
@@ -111,27 +157,64 @@ export function DictionaryModal({
 
         {/* 释义与例句 */}
         <div className="space-y-6">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
-              📖 释义
-            </h3>
-            <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
-              {result.definition}
-            </p>
-          </div>
-
-          {result.usage && (
+          {hasMeanings ? (
+            <div className="space-y-6">
+              {result.meanings!.map((meaning, idx) => (
+                <div key={idx} className="border-b border-slate-100 dark:border-slate-700 last:border-0 pb-4 last:pb-0">
+                  <span className="inline-block px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-sm font-bold mb-3 italic">
+                    {meaning.partOfSpeech}
+                  </span>
+                  <ul className="space-y-4">
+                    {meaning.definitions.map((def, dIdx) => (
+                      <li key={dIdx} className="text-slate-700 dark:text-slate-300">
+                        <p className="leading-relaxed font-medium">{def.definition}</p>
+                        {def.example && (
+                          <p className="mt-1 text-slate-500 dark:text-slate-400 text-sm italic pl-4 border-l-2 border-slate-200 dark:border-slate-600">
+                            &ldquo;{def.example}&rdquo;
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
-                💡 用法建议
+                📖 释义
               </h3>
-              <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-                {result.usage}
+              <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
+                {result.definition}
               </p>
             </div>
           )}
 
-          {result.example && (
+          {/* 精选例句 (新) */}
+          {result.examples && result.examples.length > 0 && (
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+                ✍️ 精选例句
+              </h3>
+              <div className="space-y-3">
+                {result.examples.map((ex, idx) => (
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                    <p className="text-slate-700 dark:text-slate-300 italic font-serif">
+                      &ldquo;{ex.sentence}&rdquo;
+                    </p>
+                    {ex.translation && (
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        {ex.translation}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* 兼容旧例句 */}
+          {!result.examples && result.example && (
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">
                 ✍️ 例句

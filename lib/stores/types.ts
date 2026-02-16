@@ -1,3 +1,9 @@
+/**
+ * Store 类型定义 (Store Types)
+ * 作用：定义 Zustand Store 各个 Slice 的接口和组合后的 AppState。
+ * 定义：纯类型文件，包含 Settings, Auth, Review, Article, Announcement 的接口定义。
+ * 逻辑：确保 Store 实现的类型安全，规范 State 和 Action 的签名。
+ */
 import { Article, VocabularyWord } from "@/types";
 import { User } from "@supabase/supabase-js";
 

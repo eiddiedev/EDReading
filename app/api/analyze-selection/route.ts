@@ -1,3 +1,6 @@
+/**
+ * 分析特定文本选段（单词、短语或句子）的 API 路由，提供详细的中文释义、音标、用法建议和语法分析，支持上下文理解。
+ */
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkContentSafety } from "@/lib/safety";

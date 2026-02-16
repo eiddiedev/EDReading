@@ -1,3 +1,6 @@
+/**
+ * 单词复习会话组件，提供单词拼写测试、释义展示和例句填空，根据用户表现更新掌握程度。
+ */
 "use client";
 
 import { useState, useEffect } from "react";

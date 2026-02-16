@@ -1,3 +1,9 @@
+/**
+ * 确认对话框组件 (ConfirmModal)
+ * 作用：提供一个通用的确认操作对话框，用于执行敏感或不可逆操作前的二次确认。
+ * 定义：封装了 Shadcn UI 的 AlertDialog 组件。
+ * 逻辑：接收标题、描述、取消/确认按钮文本及回调函数，通过 props 控制显示和响应用户操作。
+ */
 import React from 'react'; 
  
  interface ConfirmModalProps { 

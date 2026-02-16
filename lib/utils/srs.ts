@@ -1,3 +1,12 @@
+/**
+ * SRS 算法工具 (Spaced Repetition System)
+ * 作用：计算单词复习的间隔时间，基于艾宾浩斯遗忘曲线改良。
+ * 定义：包含核心算法函数 `calculateNextReview`。
+ * 逻辑：
+ * 1. 设定复习间隔序列：1, 2, 4, 7, 15, 30 天。
+ * 2. 成功：晋级下一阶段；失败：重置回阶段 0（严格模式）。
+ * 3. "逻辑日"计算：以凌晨 4:00 为界，确保复习任务在次日清晨刷新，而非严格的 24 小时后。
+ */
 export interface SRSResult {
   nextReviewAt: Date;
   reviewStage: number;

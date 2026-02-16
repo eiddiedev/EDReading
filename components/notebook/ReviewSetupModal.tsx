@@ -1,3 +1,6 @@
+/**
+ * 复习设置模态框，允许用户选择本次复习的单词数量（快速、标准、强化或所有）。
+ */
 "use client";
 
 import { X } from "lucide-react";
