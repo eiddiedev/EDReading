@@ -5,8 +5,14 @@ import { checkContentSafety } from "@/lib/safety";
 // Proxy to bypass firewalls and parse XML to JSON
 const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
 
-// The "All-Star" Source List
-const SOURCES = [
+/**
+ * 聚合来自多个高质量来源的 RSS 订阅源。
+ * 进行过滤、混合，并使用 AI 将标题翻译成中文。
+ * 
+ * @route GET /api/feeds
+ * @returns {object} 包含订阅文章数组 "items" 的 JSON 对象
+ */
+export async function GET() {
   // --- 1. High Level (IELTS/TOEFL/Postgrad High) ---
   { 
     name: "The Economist", 

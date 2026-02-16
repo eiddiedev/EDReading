@@ -8,6 +8,16 @@ const isDeepSeek = !process.env.AI_API_KEY && !!process.env.DEEPSEEK_API_KEY;
 const baseUrl = process.env.AI_BASE_URL || (isDeepSeek ? "https://api.deepseek.com" : "https://api.openai.com/v1");
 const model = process.env.AI_MODEL || (isDeepSeek ? "deepseek-chat" : "gpt-3.5-turbo");
 
+/**
+ * 通用 AI 端点，用于处理各种文本分析任务。
+ * 
+ * @route POST /api/ai
+ * @param {object} request.body - 请求体
+ * @param {string} request.body.action - 执行的操作: "extract_phrases" (提取短语) | "analyze_sentence" (分析句子) | "lookup_word" (查词)
+ * @param {string} request.body.text - 要分析的文本
+ * @param {string} [request.body.context] - 文本的上下文（可选）
+ * @returns {object} 包含分析结果的 JSON 响应
+ */
 export async function POST(request: Request) {
   try {
     const { action, text, context } = await request.json();

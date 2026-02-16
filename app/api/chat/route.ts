@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import { checkContentSafety } from "@/lib/safety";
 
+/**
+ * 英语学习助手的聊天接口。
+ * 强制使用特定的系统提示词，以保持对话专注于英语学习。
+ * 
+ * @route POST /api/chat
+ * @param {object} req.body
+ * @param {object[]} req.body.messages - 聊天历史记录
+ * @param {string} [req.body.userId] - 用户 ID，用于速率限制
+ * @returns {object} 助手的响应消息
+ */
 export async function POST(req: Request) {
   // 1. 获取 API Key
   const apiKey = process.env.DEEPSEEK_API_KEY || process.env.AI_API_KEY;

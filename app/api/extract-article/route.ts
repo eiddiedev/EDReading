@@ -2,6 +2,15 @@ import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { NextResponse } from 'next/server';
 
+/**
+ * 从给定的 URL 抓取并解析网页文章。
+ * 使用 Mozilla Readability 提取主要内容。
+ * 
+ * @route POST /api/extract-article
+ * @param {object} req.body
+ * @param {string} req.body.url - 要抓取的 URL
+ * @returns {object} 提取的文章数据 (标题, 内容, 纯文本)
+ */
 export async function POST(req: Request) {
   try {
     const { url } = await req.json();

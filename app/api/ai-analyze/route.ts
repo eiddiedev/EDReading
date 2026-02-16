@@ -32,6 +32,18 @@ async function getSHA256Hash(message: string) {
   return hashHex;
 }
 
+/**
+ * 分析整篇文章文本，提取词汇、短语和句子结构。
+ * 支持通过内容 SHA-256 哈希进行缓存。
+ * 
+ * @route POST /api/ai-analyze
+ * @param {object} req.body
+ * @param {string} req.body.text - 文章全文
+ * @param {string} req.body.userId - 用户 ID，用于速率限制
+ * @param {string} [req.body.level="IELTS"] - 目标难度等级
+ * @param {string} [req.body.topicId] - 可选的主题 ID
+ * @returns {Response} 分析结果的服务器发送事件流 (SSE) 或 JSON
+ */
 export async function POST(req: Request) {
   try {
     const { text, userId, level = "IELTS", topicId } = await req.json();

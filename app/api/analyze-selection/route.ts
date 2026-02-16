@@ -8,6 +8,16 @@ const isDeepSeek = !process.env.AI_API_KEY && !!process.env.DEEPSEEK_API_KEY;
 const baseUrl = process.env.AI_BASE_URL || (isDeepSeek ? "https://api.deepseek.com" : "https://api.openai.com/v1");
 const model = process.env.AI_MODEL || (isDeepSeek ? "deepseek-chat" : "gpt-3.5-turbo");
 
+/**
+ * 分析特定的文本选段（单词、短语或句子）及其上下文。
+ * 
+ * @route POST /api/analyze-selection
+ * @param {object} request.body
+ * @param {string} request.body.selection - 要分析的选定文本
+ * @param {string} [request.body.context] - 周围的文本上下文
+ * @param {string} [request.body.type="word"] - 选段类型: "word" (单词) | "phrase" (短语) | "sentence" (句子)
+ * @returns {object} 分析结果，包含释义、翻译和用法
+ */
 export async function POST(request: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

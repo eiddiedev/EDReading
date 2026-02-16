@@ -4,6 +4,12 @@ import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * 获取社区 Feed 的公开文章。
+ * 
+ * @route GET /api/community
+ * @returns {object} 最近公开文章的列表
+ */
 export async function GET() {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

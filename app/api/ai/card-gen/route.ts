@@ -4,6 +4,15 @@ const AI_API_KEY = process.env.AI_API_KEY;
 const AI_BASE_URL = process.env.AI_BASE_URL || "https://api.openai.com/v1";
 const AI_MODEL = process.env.AI_MODEL || "gpt-3.5-turbo";
 
+/**
+ * 为单词生成复杂且富含上下文的例句（经济学人风格）。
+ * 
+ * @route POST /api/ai/card-gen
+ * @param {object} request.body
+ * @param {string} request.body.word - 目标单词
+ * @param {string} [request.body.definition] - 可选的释义上下文
+ * @returns {object} 包含 "sentence" (英文) 和 "translation" (中文) 的 JSON
+ */
 export async function POST(request: Request) {
   try {
     const { word, definition } = await request.json();

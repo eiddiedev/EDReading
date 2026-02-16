@@ -96,6 +96,17 @@ const pickMandatoryKeywords = (topicId: string, count = 10) => {
   return shuffle(unique).slice(0, count);
 };
 
+/**
+ * 根据主题和难度等级生成新的阅读文章。
+ * 
+ * @route POST /api/generate-ielts
+ * @param {object} req.body
+ * @param {string} req.body.topicPrompt - 用户提供的主题或关键词
+ * @param {string} [req.body.topicId] - 宽泛的分类 ID (tech, env 等)
+ * @param {string} [req.body.level="IELTS"] - 难度等级 (CET-4, IELTS 等)
+ * @param {string} req.body.userId - 请求用户的 ID
+ * @returns {object} 生成的文章对象 (已保存到数据库)
+ */
 export async function POST(req: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;

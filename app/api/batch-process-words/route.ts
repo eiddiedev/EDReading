@@ -3,6 +3,14 @@ import { NextResponse } from "next/server";
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || process.env.AI_API_KEY;
 const AI_BASE_URL = process.env.AI_BASE_URL || "https://api.deepseek.com";
 
+/**
+ * 批量处理单词列表，生成字典数据（释义、翻译等）。
+ * 
+ * @route POST /api/batch-process-words
+ * @param {object} req.body
+ * @param {string[]} req.body.words - 要处理的单词数组
+ * @returns {object} 包含字典条目数组 "results" 的 JSON 对象
+ */
 export async function POST(req: Request) {
   if (!DEEPSEEK_API_KEY) {
     return NextResponse.json({ error: "Missing API Key" }, { status: 500 });
