@@ -5,11 +5,17 @@
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
+  --color-level-1: 15, 118, 110;
+  --color-level-2: 180, 83, 9;
+  --color-level-3: 190, 18, 60;
 }
 
 .dark {
   --background: #0f172a;
   --foreground: #f8fafc;
+  --color-level-1: 45, 212, 191;
+  --color-level-2: 251, 191, 36;
+  --color-level-3: 251, 113, 133;
 }
 
 body {
@@ -18,69 +24,33 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-  
-  /* 
-    移动端/低端设备 CSS 性能优化 
-    移除 backdrop-filter 避免卡顿
-  */
-  @media (max-width: 768px) {
-    .backdrop-blur-sm,
-    .backdrop-blur-md,
-    .backdrop-blur-lg,
-    .backdrop-blur-xl,
-    .backdrop-blur-2xl,
-    .backdrop-blur-3xl {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-    }
-
-    .dark .backdrop-blur-sm,
-    .dark .backdrop-blur-md,
-    .dark .backdrop-blur-lg,
-    .dark .backdrop-blur-xl,
-    .dark .backdrop-blur-2xl,
-    .dark .backdrop-blur-3xl {
-      /* Remove forced background color override */
-    }
-    
-    /* 优化长列表滚动性能 */
-    .scroll-container {
-        will-change: transform;
-        -webkit-overflow-scrolling: touch;
-    }
-  }
+.word-level-1 {
+  color: inherit;
+  background-color: transparent;
+  border-bottom: none;
+}
+.word-level-2 {
+  color: rgb(var(--color-level-1));
+  background-color: rgba(var(--color-level-1), 0.1);
+  font-weight: 600;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+.word-level-3 {
+  color: rgb(var(--color-level-2));
+  background-color: rgba(var(--color-level-2), 0.12);
+  font-weight: 600;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+.word-level-4 {
+  color: rgb(var(--color-level-3));
+  background-color: rgba(var(--color-level-3), 0.1);
+  font-weight: 700;
+  padding: 0 1px;
+  border-radius: 2px;
 }
 
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.animate-slide-up {
-  animation: slide-up 0.3s ease-out;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.2s ease-out;
+.text-balance {
+  text-wrap: balance;
 }

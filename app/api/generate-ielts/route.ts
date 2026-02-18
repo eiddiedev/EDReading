@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkContentSafety } from '@/lib/safety';
-import vocabularyData from '@/lib/vocabulary-data.json';
+import { IELTS_VOCAB_DB } from '@/lib/ielts-vocabulary';
 import type { VocabularyCategory, VocabularyDatabase } from '@/types';
 
 // --- 配置区域 ---
@@ -58,7 +58,7 @@ const LEVEL_CONFIG: Record<string, string> = {
   'PG-Entrance': 'Level: Chinese Postgraduate Entrance Exam (Kaoyan). Focus: long complex sentences and precise logic.'
 };
 
-const VOCAB_DB = vocabularyData as VocabularyDatabase;
+const VOCAB_DB = IELTS_VOCAB_DB as VocabularyDatabase;
 
 const TOPIC_VOCAB_LABELS: Record<string, string[]> = {
   env: ['自然地理', '植物研究', '动物保护'],

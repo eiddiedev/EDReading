@@ -19,6 +19,8 @@ import { motion, AnimatePresence } from "framer-motion";
 interface SimpleDictionaryModalProps {
   result: DictionaryResult | null;
   isLoading?: boolean;
+  isRemoteLoading?: boolean;
+  isAiLoading?: boolean;
   onClose: () => void;
   onAddToNotebook: (word: DictionaryResult) => void;
 }
@@ -26,6 +28,8 @@ interface SimpleDictionaryModalProps {
 export function SimpleDictionaryModal({
   result,
   isLoading = false,
+  isRemoteLoading = false,
+  isAiLoading = false,
   onClose,
   onAddToNotebook,
 }: SimpleDictionaryModalProps) {
@@ -74,9 +78,14 @@ export function SimpleDictionaryModal({
     if (isLoading) {
       return (
         <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin" />
+            <div className="text-lg font-medium text-slate-700 dark:text-slate-300">
+              查询中...
+            </div>
+          </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm animate-pulse">
-            AI 正在查询...
+            正在获取单词释义和例句
           </p>
         </div>
       );
@@ -107,6 +116,27 @@ export function SimpleDictionaryModal({
              ))}
           </div>
         </div>
+
+        {/* 中文释义区域 - 预留空间并显示加载状态 */}
+          <div className="mt-3 min-h-[60px]">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              中文释义
+            </h3>
+            {isRemoteLoading || isAiLoading ? (
+              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm">查询中...</span>
+              </div>
+            ) : result?.cnDefinition ? (
+              <p className="text-xl text-slate-800 dark:text-slate-200 font-semibold">
+                {result.cnDefinition}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                暂无中文释义
+              </p>
+            )}
+          </div>
 
         {/* 释义与例句 */}
         <div className="space-y-6">

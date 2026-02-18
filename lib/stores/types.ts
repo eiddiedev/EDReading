@@ -12,6 +12,9 @@ export interface SettingsSlice {
   toggleDarkMode: () => void;
   fontSize: number;
   setFontSize: (size: number) => void;
+  targetLevel: string;
+  setTargetLevel: (level: string) => Promise<void>;
+  fetchTargetLevel: () => Promise<void>;
 }
 
 export interface AuthSlice {

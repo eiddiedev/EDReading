@@ -5,7 +5,7 @@
 
 import { checkContentSafety } from "@/lib/safety";
 import type { AIProcessResult } from "@/lib/ai-processor";
-import vocabularyData from "@/lib/vocabulary-data.json";
+import { IELTS_VOCAB_DB } from "@/lib/ielts-vocabulary";
 import type { VocabularyCategory, VocabularyDatabase } from "@/types";
 import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -16,7 +16,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const VOCAB_DB = vocabularyData as VocabularyDatabase;
+const VOCAB_DB = IELTS_VOCAB_DB as VocabularyDatabase;
 
 const TOPIC_VOCAB_LABELS: Record<string, string[]> = {
   env: ["自然地理", "植物研究", "动物保护"],

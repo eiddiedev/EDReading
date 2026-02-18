@@ -15,7 +15,6 @@ import { useAppStore } from "@/lib/store";
 import { Loader2, Sparkles, X, GraduationCap } from "lucide-react";
 import { SimpleDictionaryModal } from "./SimpleDictionaryModal";
 import { DictionaryResult } from "@/types";
-import { lookupLocal } from "@/lib/local-dictionary";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { triggerHaptic } from "@/lib/utils";
@@ -41,6 +40,8 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
   const [isConfirmSheetOpen, setIsConfirmSheetOpen] = useState(false);
   const [dictionaryResult, setDictionaryResult] = useState<DictionaryResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isRemoteLoading, setIsRemoteLoading] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
   const [isSentenceAnalyzing, setIsSentenceAnalyzing] = useState(false);
@@ -51,12 +52,27 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
   const touchStartRef = useRef<{ x: number, y: number } | null>(null);
 
   const addVocabulary = useAppStore((state) => state.addVocabulary);
-  const { dailyUsage, ensureDailyUsage, checkSentenceAnalysisQuota, isAdmin } = useAppStore((state) => ({
+  const { 
+    dailyUsage, 
+    ensureDailyUsage, 
+    checkSentenceAnalysisQuota, 
+    isAdmin, 
+    fetchTargetLevel,
+    targetLevel,
+    setTargetLevel
+  } = useAppStore((state) => ({
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
     checkSentenceAnalysisQuota: state.checkSentenceAnalysisQuota,
     isAdmin: state.isAdmin,
+    fetchTargetLevel: state.fetchTargetLevel,
+    targetLevel: state.targetLevel,
+    setTargetLevel: state.setTargetLevel
   }));
+
+  useEffect(() => {
+    fetchTargetLevel();
+  }, [fetchTargetLevel]);
 
   useEffect(() => {
     if (initialLocation !== undefined) {
@@ -201,6 +217,8 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
   const closeSheet = () => {
     setIsSheetOpen(false);
     setIsAnalyzing(false);
+    setIsRemoteLoading(false);
+    setIsAiLoading(false);
     setDictionaryResult(null);
     setSelectedText(null);
     lookupTokenRef.current += 1;
@@ -232,6 +250,11 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
     setIsSentenceAnalyzing(true);
     setAnalysisResult(null);
     setIsSentenceSheetOpen(true);
+    
+    // 重置单词查询状态
+    setDictionaryResult(null);
+    setIsRemoteLoading(false);
+    setIsAiLoading(false);
 
     try {
       const response = await fetch("/api/analyze-selection", {
@@ -258,28 +281,43 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
     const cleanWord = text.trim().replace(/[.,!?;:"'(){}\[\]]/g, "");
     if (!cleanWord) return;
 
-    // A. 优先查本地 (性能优化：无网络、无延迟)
-    // 直接调用，不进 loading 状态，给用户“秒开”的感觉
-    const localRes = lookupLocal(cleanWord);
-    if (localRes) {
-      setDictionaryResult({
-        word: localRes.text,
-        phonetic: localRes.phonetic,
-        definition: localRes.definition,
-        tags: localRes.tags,
-        example: localRes.example,
-        exampleTranslation: localRes.translation
-      });
-      setIsSheetOpen(true);
-      setIsAnalyzing(false);
-      return;
+    // 重置状态
+    setDictionaryResult(null);
+    setIsRemoteLoading(false);
+    setIsAiLoading(false);
+
+    // A. 优先查 Supabase Dictionary (性能优化：无需 AI)
+    // 直接调用 API
+    try {
+      setIsRemoteLoading(true); // 开始数据库查询
+      setIsSheetOpen(true); // 提前打开模态框显示加载状态
+      
+      const dictRes = await fetch(`/api/dictionary/lookup?word=${encodeURIComponent(cleanWord)}`);
+      if (dictRes.ok) {
+        const data = await dictRes.json();
+        if (data && data.word) {
+          setDictionaryResult({
+            word: data.word,
+            phonetic: data.phonetic,
+            definition: data.translation,
+            cnDefinition: data.translation, // 添加中文释义
+            tags: data.tag ? data.tag.split(' ') : [],
+            example: "", // 数据库暂无例句
+            exampleTranslation: ""
+          });
+          setIsRemoteLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Dictionary lookup failed", err);
+    } finally {
+      setIsRemoteLoading(false); // 数据库查询结束
     }
 
     // B. 本地没有，才联网 (兜底)
     const token = ++lookupTokenRef.current;
-    setIsSheetOpen(true); 
-    setDictionaryResult(null);
-    setIsAnalyzing(true);
+    setIsAiLoading(true); // 开始AI查询
 
     try {
       const res = await fetch("/api/analyze-selection", {
@@ -296,13 +334,29 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
       console.error(e);
     } finally {
       if (lookupTokenRef.current === token) {
-        setIsAnalyzing(false);
+        setIsAiLoading(false); // AI查询结束
       }
     }
   };
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)] bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
+        <select
+          value={targetLevel || 'ielts'}
+          onChange={(e) => setTargetLevel(e.target.value)}
+          className="bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        >
+          <option value="zk">中考</option>
+          <option value="gk">高考</option>
+          <option value="cet4">四级</option>
+          <option value="cet6">六级</option>
+          <option value="ky">考研</option>
+          <option value="ielts">雅思</option>
+          <option value="toefl">托福</option>
+        </select>
+      </div>
+
       <ReactReader
         url={url}
         title={title}
@@ -384,7 +438,9 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
       {/* 底部查词抽屉 */}
       <SimpleDictionaryModal
         result={isSheetOpen ? dictionaryResult : null}
-        isLoading={isSheetOpen ? isAnalyzing : false}
+        isLoading={isSheetOpen ? (isRemoteLoading || isAiLoading) : false}
+        isRemoteLoading={isSheetOpen ? isRemoteLoading : false}
+        isAiLoading={isSheetOpen ? isAiLoading : false}
         onClose={closeSheet}
         onAddToNotebook={(word) => {
           addVocabulary({

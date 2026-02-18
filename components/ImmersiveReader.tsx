@@ -1,26 +1,17 @@
-/**
- * 沉浸式阅读器组件 (ImmersiveReader)
- * 作用：提供一个无干扰的文本阅读环境，支持逐词/逐句高亮和翻译。
- * 定义：核心阅读界面，专注于文本内容的展示和交互。
- * 逻辑：
- * 1. 接收文章内容，进行分词和排版渲染。
- * 2. 支持点击单词查询字典，选中句子进行翻译或分析。
- * 3. 集成 TTS（文本转语音）功能，支持跟随朗读高亮。
- * 4. 动态调整字体、字号、行高和背景色以适应用户偏好。
- */
 "use client";
-// 沉浸式阅读器组件
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { DictionaryResult, AIVocabulary } from "@/types";
-import { lookupWord, analyzeSentence } from "../lib/dictionary";
-import { highlightStaticVocab } from "../lib/vocab-engine";
+import { lookupLocalDictionary, lookupExternalDictionary, lookupAiDictionary } from "../lib/dictionary";
+import { calculateWordLevel, extractWords, WordMetadata, HighlightLevel } from "../lib/vocab-engine";
 import phrasesData from "../lib/phrases-data.json";
 import { DictionaryModal } from "./DictionaryModal";
 import { WordCardModal } from "./WordCardModal";
 import { useAppStore } from "@/lib/store";
 import { Sparkles, Loader2, X, BookOpen, GraduationCap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { triggerHaptic } from "@/lib/utils";
 
+// ... (接口定义保持不变)
 interface ImmersiveReaderProps {
   title: string;
   title_zh?: string;
@@ -36,8 +27,6 @@ interface ImmersiveReaderProps {
   id?: string;
 }
 
-import { triggerHaptic } from "@/lib/utils";
-
 export function ImmersiveReader({ 
   title, 
   title_zh, 
@@ -52,10 +41,12 @@ export function ImmersiveReader({
   onReadComplete,
   id
 }: ImmersiveReaderProps) {
-  // State
+  // ... (State 保持不变)
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
-  const [dictionaryResult, setDictionaryResult] = useState<DictionaryResult | null>(null);
-  const [isDictionaryLoading, setIsDictionaryLoading] = useState(false);
+  const [localResult, setLocalResult] = useState<DictionaryResult | null>(null);
+  const [remoteResult, setRemoteResult] = useState<DictionaryResult | null>(null);
+  const [isRemoteLoading, setIsRemoteLoading] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   
   // Selection & Analysis State
   const [selectedText, setSelectedText] = useState<string | null>(null);
@@ -66,6 +57,29 @@ export function ImmersiveReader({
   const [showWordCard, setShowWordCard] = useState(false);
   const [wordCardData, setWordCardData] = useState<DictionaryResult | null>(null);
   
+  const [wordLevels, setWordLevels] = useState<Map<string, HighlightLevel>>(new Map());
+  
+  // ... (useMemo mergedResult 保持不变)
+  const mergedResult = useMemo<DictionaryResult | null>(() => {
+    if (!localResult && !remoteResult) return null;
+    const baseWord = localResult?.word || remoteResult?.word || "";
+    return {
+      word: baseWord,
+      phonetic: localResult?.phonetic || remoteResult?.phonetic,
+      audio: remoteResult?.audio || localResult?.audio, // 优先用远程音频
+      cnDefinition: localResult?.cnDefinition || remoteResult?.cnDefinition,
+      meanings: remoteResult?.meanings || localResult?.meanings,
+      examples: remoteResult?.examples || localResult?.examples,
+      definition: localResult?.definition || remoteResult?.definition || "查询中...", // 优先显示本地
+      example: remoteResult?.example || localResult?.example,
+      exampleTranslation: remoteResult?.exampleTranslation || localResult?.exampleTranslation,
+      tags: localResult?.tags || remoteResult?.tags,
+      isAiGenerated: localResult?.isAiGenerated || remoteResult?.isAiGenerated,
+      usage: remoteResult?.usage || localResult?.usage
+    };
+  }, [localResult, remoteResult]);
+
+  // ... (useAppStore 和 useEffect 保持不变，直到 handleWordClick)
   const fontSize = useAppStore((state) => state.fontSize);
   const addVocabulary = useAppStore((state) => state.addVocabulary);
   const {
@@ -74,7 +88,10 @@ export function ImmersiveReader({
     checkSentenceAnalysisQuota,
     isAdmin,
     articleReadProgress,
-    updateArticleReadProgress
+    updateArticleReadProgress,
+    targetLevel,
+    setTargetLevel,
+    fetchTargetLevel
   } = useAppStore((state) => ({
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
@@ -82,7 +99,14 @@ export function ImmersiveReader({
     isAdmin: state.isAdmin,
     articleReadProgress: state.articleReadProgress,
     updateArticleReadProgress: state.updateArticleReadProgress,
+    targetLevel: state.targetLevel,
+    setTargetLevel: state.setTargetLevel,
+    fetchTargetLevel: state.fetchTargetLevel
   }));
+
+  useEffect(() => {
+    fetchTargetLevel();
+  }, [fetchTargetLevel]);
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedWordRef = useRef<string | null>(null);
   const phraseCacheRef = useRef<Record<string, DictionaryResult>>({});
@@ -90,6 +114,7 @@ export function ImmersiveReader({
   const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasRestoredScrollRef = useRef(false);
 
+  // ... (Scroll logic 保持不变)
   // Scroll restoration
   useEffect(() => {
     // Reset restored flag when id changes
@@ -146,18 +171,6 @@ export function ImmersiveReader({
     return () => window.removeEventListener("scroll", handleScroll);
   }, [onReadComplete]);
 
-  const staticMatches = useMemo(() => highlightStaticVocab(content), [content]);
-  const staticMatchMap = useMemo(() => {
-    const map = new Map<number, (typeof staticMatches)[number]>();
-    staticMatches.forEach((match) => {
-      map.set(match.start, match);
-    });
-    return map;
-  }, [staticMatches]);
-  const aiVocabSet = useMemo(() => new Set(aiVocabulary.map((v) => v.word.toLowerCase())), [aiVocabulary]);
-  const topicKey = useMemo(() => topic?.toLowerCase().trim() || "", [topic]);
-
-  // Sync ref with state for async checks
   useEffect(() => {
     selectedWordRef.current = selectedWord;
   }, [selectedWord]);
@@ -205,6 +218,66 @@ export function ImmersiveReader({
     return Array.from(new Set(merged));
   }, [articlePhrases, normalizePhrase]);
 
+  useEffect(() => {
+    const fetchLevels = async () => {
+      if (!content) return;
+      try {
+        const uniqueWords = extractWords(content);
+        if (uniqueWords.length === 0) {
+          setWordLevels(new Map());
+          return;
+        }
+        const cacheKey = `vocab-levels-v3-${id || "temp"}-${targetLevel || "ielts"}`;
+        if (typeof window !== "undefined") {
+          const cachedData = localStorage.getItem(cacheKey);
+          if (cachedData) {
+            try {
+              const parsed = JSON.parse(cachedData) as [string, HighlightLevel][];
+              setWordLevels(new Map(parsed));
+            } catch (error) {
+              console.error("Cache parse error", error);
+            }
+          }
+        }
+        const response = await fetch('/api/dictionary/levels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ words: uniqueWords })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Failed to fetch word levels:', errorText);
+          return;
+        }
+
+        const data: WordMetadata[] = await response.json();
+        const levelMap = new Map<string, HighlightLevel>();
+
+        data.forEach(meta => {
+          const level = calculateWordLevel(meta, targetLevel || "ielts");
+          if (level > 0) {
+            levelMap.set(meta.word.toLowerCase(), level);
+          }
+        });
+
+        setWordLevels(levelMap);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(Array.from(levelMap.entries())));
+          } catch (error) {
+            console.error("Cache write error", error);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching word levels:', error);
+      }
+    };
+
+    fetchLevels();
+  }, [content, targetLevel]);
+
+  // ... (phrases regex logic 保持不变)
   const phrasePatterns = useMemo(
     () =>
       phrases
@@ -221,9 +294,6 @@ export function ImmersiveReader({
   const phraseMatches = useMemo(() => {
     if (!content || phrasePatterns.length === 0) return [];
     const occupied = new Array(content.length).fill(false);
-    staticMatches.forEach((match) => {
-      for (let idx = match.start; idx < match.end; idx += 1) occupied[idx] = true;
-    });
     const matches: { start: number; end: number; text: string; phrase: string }[] = [];
     phrasePatterns.forEach((pattern) => {
       if (!pattern.regex) return;
@@ -237,7 +307,7 @@ export function ImmersiveReader({
           if (occupied[idx]) {
             blocked = true;
             break;
-          }
+            }
         }
         if (blocked) continue;
         matches.push({ start, end, text: match[0], phrase: pattern.phrase });
@@ -246,7 +316,7 @@ export function ImmersiveReader({
     });
     matches.sort((a, b) => a.start - b.start);
     return matches;
-  }, [content, phrasePatterns, staticMatches]);
+  }, [content, phrasePatterns]);
 
   const phraseMatchMap = useMemo(() => {
     const map = new Map<number, (typeof phraseMatches)[number]>();
@@ -265,62 +335,79 @@ export function ImmersiveReader({
     }
   }, []);
 
-  // --- Handlers ---
+  // --- Handlers (重点修改部分) ---
 
-  // Handle single word click (Existing functionality - Instant lookup)
   const handleWordClick = async (word: string) => {
-    // Clear any selection to prevent conflict with handleSelection
     if (typeof window !== "undefined") {
       window.getSelection()?.removeAllRanges();
     }
     
-    // 保留空格和连字符，只移除标点符号
     const cleanWord = word.toLowerCase().trim().replace(/[^\w\s-]/g, "");
     if (cleanWord.length > 0) {
+      selectedWordRef.current = cleanWord;
       setSelectedWord(cleanWord);
       setHighlightedWord(word);
-      // Close selection sheet if open
-      setIsSheetOpen(false); 
+      setIsSheetOpen(false);
       setSelectedText(null);
+      setLocalResult(null);
+      setRemoteResult(null);
+      setIsAiLoading(false);
+      setIsRemoteLoading(true);
 
-      // 1. Call lookupWord (handles cache and API)
-      setIsDictionaryLoading(true);
-      setDictionaryResult(null); 
-      
+      void (async () => {
+        try {
+          const remote = await lookupExternalDictionary(cleanWord);
+          if (selectedWordRef.current === cleanWord) {
+            setRemoteResult(remote);
+          }
+        } catch (error) {
+          console.error("External dictionary lookup failed:", error);
+        } finally {
+          if (selectedWordRef.current === cleanWord) {
+            setIsRemoteLoading(false);
+          }
+        }
+      })();
+
       try {
-        const result = await lookupWord(cleanWord);
-        if (result && selectedWordRef.current === cleanWord) {
-          setDictionaryResult(result);
+        const local = await lookupLocalDictionary(cleanWord);
+        if (selectedWordRef.current === cleanWord) {
+          if (local) {
+            setLocalResult(local);
+            setIsAiLoading(false);
+          } else {
+            // 立即设置一个临时的 AI 加载状态，触发骨架屏
+            setLocalResult({
+              word: cleanWord,
+              definition: "", // 空定义
+              isAiGenerated: true, // 标记为 AI，让 Modal 知道如何显示
+            });
+            setIsAiLoading(true);
+            
+            const aiResult = await lookupAiDictionary(cleanWord, targetLevel || "ielts");
+            if (selectedWordRef.current === cleanWord) {
+              if (aiResult) {
+                setLocalResult(aiResult);
+              } else {
+                // AI 查询失败或无结果，可以保留骨架屏或显示错误
+                setLocalResult({
+                  word: cleanWord,
+                  definition: "AI 查询失败或无结果",
+                  isAiGenerated: true, // 保持 AI 标记
+                });
+              }
+              setIsAiLoading(false);
+            }
+          }
         }
       } catch (error) {
         console.error("Dictionary lookup failed:", error);
-      } finally {
-        setIsDictionaryLoading(false);
+        setIsAiLoading(false);
       }
     }
   };
 
-  const handleStaticWordClick = (match: (typeof staticMatches)[number]) => {
-    if (typeof window !== "undefined") {
-      window.getSelection()?.removeAllRanges();
-    }
-    setSelectedWord(match.word.toLowerCase());
-    setHighlightedWord(match.word);
-    setIsSheetOpen(false);
-    setSelectedText(null);
-    setShowWordCard(false);
-    setWordCardData(null);
-    const meaning = `${match.entry.pos} ${match.entry.meaning}`.trim();
-    setDictionaryResult({
-      word: match.word,
-      definition: meaning,
-      example: match.entry.example === "-" ? undefined : match.entry.example,
-      tags: [`📌 核心话题词：${match.entry.label}`],
-      isAiGenerated: false,
-    });
-    setIsDictionaryLoading(false);
-  };
-
+  // ... (其他 handlers 保持不变)
   const buildPhraseContext = (start: number, end: number) => {
     const padding = 80;
     const left = Math.max(0, start - padding);
@@ -337,15 +424,18 @@ export function ImmersiveReader({
     if (!/^[\x00-\x7F]+$/.test(cleanPhrase)) return;
     setSelectedWord(cleanPhrase);
     setHighlightedWord(cleanPhrase);
-    setIsDictionaryLoading(true);
     setIsSheetOpen(false);
     setSelectedText(null);
+    setLocalResult(null);
+    setRemoteResult(null);
+    setIsRemoteLoading(false);
+    setIsAiLoading(false);
 
     const cacheKey = cleanPhrase.toLowerCase();
     const cached = phraseCacheRef.current[cacheKey];
     if (cached) {
-      setDictionaryResult(cached);
-      setIsDictionaryLoading(false);
+      setLocalResult(cached);
+      setRemoteResult(cached);
       return;
     }
 
@@ -374,27 +464,20 @@ export function ImmersiveReader({
       };
       phraseCacheRef.current[cacheKey] = result;
       localStorage.setItem("phrase_translation_cache_v1", JSON.stringify(phraseCacheRef.current));
-      setDictionaryResult(result);
+      setLocalResult(result);
+      setRemoteResult(result);
     } catch (error) {
       console.error("Phrase Analysis Error:", error);
-    } finally {
-      setIsDictionaryLoading(false);
     }
   };
 
-  // Handle text selection (New Feature)
   const handleSelection = useCallback(() => {
-    // Only handle if sheet is not already open for a word
     if (isSheetOpen && analysisResult?.type === "word") return;
-
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return;
-
-    // Ensure selection is within content area
     if (contentRef.current && selection.anchorNode && !contentRef.current.contains(selection.anchorNode)) {
       return;
     }
-
     const text = selection.toString().trim();
     if (text.length > 0) {
        setSelectedText(text);
@@ -404,14 +487,11 @@ export function ImmersiveReader({
     }
   }, [isSheetOpen, analysisResult]);
 
-  // Add event listener for selectionchange to handle mobile selection handles better
   useEffect(() => {
     const onSelectionChange = () => {
       if (selectionTimeoutRef.current) {
         clearTimeout(selectionTimeoutRef.current);
       }
-      
-      // Debounce: Wait 600ms for selection to settle (handles user dragging handles)
       selectionTimeoutRef.current = setTimeout(() => {
          handleSelection();
       }, 600);
@@ -426,9 +506,7 @@ export function ImmersiveReader({
 
   const handleAnalyzeSelection = async () => {
     if (!selectedText) return;
-    
     try {
-      // 1. Determine Type
       const isWord = !selectedText.includes(" ");
       const type = isWord ? "word" : "sentence";
 
@@ -439,10 +517,9 @@ export function ImmersiveReader({
       setIsAnalyzing(true);
       setAnalysisResult(null);
 
-      // 2. Local Check for Word
       if (isWord) {
         const cleanWord = selectedText.toLowerCase().replace(/[^\w\s-]/g, "");
-        const result = await lookupWord(cleanWord);
+        const result = await lookupLocalDictionary(cleanWord);
         if (result) {
            setAnalysisResult({
              type: "word",
@@ -453,13 +530,11 @@ export function ImmersiveReader({
         }
       }
 
-      // 3. API Request
       const response = await fetch("/api/analyze-selection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selection: selectedText,
-          // context: "...", // Could grab surrounding text if needed
           type: type
         })
       });
@@ -474,7 +549,6 @@ export function ImmersiveReader({
 
     } catch (error) {
       console.error("Analysis Error:", error);
-      // Show error state in sheet?
     } finally {
       setIsAnalyzing(false);
     }
@@ -492,22 +566,25 @@ export function ImmersiveReader({
       reviewCount: 0,
       correctCount: 0,
     });
-    
-    // Trigger Word Card
     setWordCardData(word);
-    setSelectedWord(null); // Close Dictionary Modal (it uses selectedWord !== null)
-    setIsSheetOpen(false); // Close action sheet
-    // setShowWordCard(true); // Disable auto-popup of Word Card
+    setSelectedWord(null);
+    setLocalResult(null);
+    setRemoteResult(null);
+    setIsRemoteLoading(false);
+    setIsAiLoading(false);
+    setIsSheetOpen(false);
   };
 
   const closeModal = () => {
-    setDictionaryResult(null);
+    setLocalResult(null);
+    setRemoteResult(null);
+    setIsRemoteLoading(false);
+    setIsAiLoading(false);
     setSelectedWord(null);
     setHighlightedWord(null);
   };
 
-  // --- Render Helpers ---
-
+  // ... (renderContent 保持不变)
   const renderContent = () => {
     if (!content) return <p className="text-slate-500 italic">No content available.</p>;
     
@@ -517,42 +594,6 @@ export function ImmersiveReader({
     const boundaryAt = (pos: number) => pos <= 0 || pos >= content.length || !isWordChar(content[pos]);
 
     while (i < content.length) {
-      const staticMatch = staticMatchMap.get(i);
-      if (staticMatch) {
-        const labelKey = staticMatch.entry.label.toLowerCase().trim();
-        const isTopicMatch = topicKey && (topicKey.includes(labelKey) || labelKey.includes(topicKey));
-        const difficultyClassMap: Record<string, string> = {
-          easy: "text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/40 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/60",
-          medium: "text-sky-700 dark:text-sky-300 bg-sky-100/70 dark:bg-sky-900/40 hover:bg-sky-200/70 dark:hover:bg-sky-900/60",
-          hard: "text-purple-800 dark:text-purple-200 bg-purple-100/70 dark:bg-purple-900/40 hover:bg-purple-200/70 dark:hover:bg-purple-900/60",
-          expert: "text-rose-700 dark:text-rose-300 bg-rose-100/70 dark:bg-rose-900/40 hover:bg-rose-200/70 dark:hover:bg-rose-900/60",
-        };
-        const difficultyClass =
-          difficultyClassMap[staticMatch.entry.difficulty] ||
-          "text-purple-800 dark:text-purple-200 bg-purple-100/70 dark:bg-purple-900/40 hover:bg-purple-200/70 dark:hover:bg-purple-900/60";
-        const staticClass = [
-          "font-bold cursor-help transition-all",
-          difficultyClass,
-          isTopicMatch ? "border-b-2 border-purple-300 font-extrabold" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-        nodes.push(
-          <span
-            key={`static-${staticMatch.start}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleStaticWordClick(staticMatch);
-            }}
-            className={staticClass}
-          >
-            {staticMatch.word}
-          </span>
-        );
-        i = staticMatch.end;
-        continue;
-      }
-
       const phraseMatch = phraseMatchMap.get(i);
       if (phraseMatch && boundaryAt(i - 1) && boundaryAt(i + phraseMatch.text.length)) {
         nodes.push(
@@ -574,7 +615,6 @@ export function ImmersiveReader({
 
       const ch = content[i];
       if (/[\s.,!?;:"'(){}\[\]]/.test(ch)) {
-        // Punctuation and spaces
         nodes.push(<span key={`sym-${i}`}>{ch}</span>);
         i += 1;
         continue;
@@ -584,21 +624,29 @@ export function ImmersiveReader({
         const start = i;
         while (i < content.length && isWordChar(content[i])) i += 1;
         const word = content.slice(start, i);
+        const lowerWord = word.toLowerCase();
+        
         const isHighlighted = highlightedWord === word;
-        const isAiVocab = aiVocabSet.has(word.toLowerCase());
+        const level = wordLevels.get(lowerWord) || 0;
+        
+        let className = "cursor-pointer rounded px-[1px] transition-colors ";
+        className += "hover:bg-slate-200 dark:hover:bg-slate-700 ";
+
+        if (isHighlighted) {
+          className += "bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 ";
+        } else if (level > 0) {
+          // 这里虽然是动态类名，但因为我们在 globals.css 里移除了 @layer utilities，所以现在会生效了
+          className += `word-level-${level} `;
+        }
 
         nodes.push(
           <span
             key={`word-${start}`}
-            onClick={(e) => { e.stopPropagation(); handleWordClick(word); }}
-            className={`cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded px-0.5 transition-colors ${
-              isHighlighted ? "bg-primary-200 dark:bg-primary-800" : ""
-            } ${
-              isAiVocab
-                ? "text-amber-700 bg-amber-50/60 font-semibold border-b border-amber-200 cursor-help transition-all hover:bg-amber-100"
-                : ""
-            }`}
-            title={isAiVocab ? "重点词汇" : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleWordClick(word);
+            }}
+            className={className}
           >
             {word}
           </span>
@@ -606,16 +654,34 @@ export function ImmersiveReader({
         continue;
       }
 
-      // Any other chars (should be rare)
       nodes.push(<span key={`char-${i}`}>{ch}</span>);
       i += 1;
     }
+    
     return nodes;
   };
 
   return (
-    <div className="w-full relative">
-      {/* Article Header */}
+    // ... (JSX 返回部分保持不变，因为只改了逻辑和 CSS)
+    <div className="relative min-h-screen bg-white dark:bg-slate-950 pb-20">
+      {/* Level Selector */}
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        <select
+          value={targetLevel || 'ielts'}
+          onChange={(e) => setTargetLevel(e.target.value)}
+          className="bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        >
+          <option value="zk">中考</option>
+          <option value="gk">高考</option>
+          <option value="cet4">四级</option>
+          <option value="cet6">六级</option>
+          <option value="ky">考研</option>
+          <option value="ielts">雅思</option>
+          <option value="toefl">托福</option>
+        </select>
+      </div>
+      
+      {/* ... (Header and Content UI keep same) */}
       <div className="mb-8 border-b border-slate-100 dark:border-slate-800 pb-6">
         {tags && tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
@@ -647,7 +713,7 @@ export function ImmersiveReader({
         </div>
         
         <div className="mt-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-          💡 阅读贴士： 文章已自动标记核心考点。<span className="text-purple-600 dark:text-purple-400 font-medium">颜色标注词汇</span>为雅思核心话题词汇（本地词库，释义可能不全），<span className="text-amber-500 dark:text-amber-400 font-medium">金色下划线</span>为雅思/托福学术常用短语。
+          💡 阅读贴士： 文章已自动标记核心考点。<span className="text-purple-600 dark:text-purple-400 font-medium">颜色标注词汇</span>为等级核心词汇（本地词库，释义可能不全），<span className="text-amber-500 dark:text-amber-400 font-medium">金色下划线</span>为雅思/托福学术常用短语。
         </div>
       </div>
 
@@ -656,7 +722,7 @@ export function ImmersiveReader({
           阅读
         </h2>
         <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
-           💡 点击单词/框选句子以使用AI分析
+            💡 点击单词/框选句子以使用AI分析
         </span>
       </div>
 
@@ -668,8 +734,6 @@ export function ImmersiveReader({
           fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif',
           lineHeight: '1.8'
         }}
-        // onMouseUp={handleSelection} - Handled by selectionchange
-        // onTouchEnd - Handled by selectionchange
       >
         <div 
           className="text-slate-800 dark:text-slate-200 text-lg md:text-xl tracking-wide whitespace-pre-wrap"
@@ -695,6 +759,7 @@ export function ImmersiveReader({
             }}
             className="fixed bottom-[60px] md:bottom-0 left-0 right-0 bg-white dark:bg-slate-900 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] rounded-t-2xl z-40 border-t border-slate-100 dark:border-slate-800 max-h-[80vh] flex flex-col"
           >
+            {/* ... sheet content kept same ... */}
             <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing" onClick={() => setIsSheetOpen(false)}>
                <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full" />
             </div>
@@ -854,15 +919,22 @@ export function ImmersiveReader({
       </AnimatePresence>
 
       <DictionaryModal
-        result={dictionaryResult}
-        isLoading={isDictionaryLoading}
+        result={mergedResult}
+        localResult={localResult}
+        remoteResult={remoteResult}
+        isRemoteLoading={isRemoteLoading}
+        isAiLoading={isAiLoading}
+        currentWord={selectedWord || undefined}
         onClose={closeModal}
         onAddToNotebook={handleAddToNotebook}
         onOpenWordCard={(word) => {
           setWordCardData(word);
           setShowWordCard(true);
-          // Close DictionaryModal for smooth transition
-          setSelectedWord(null); 
+          setSelectedWord(null);
+          setLocalResult(null);
+          setRemoteResult(null);
+          setIsRemoteLoading(false);
+          setIsAiLoading(false);
         }}
       />
 
