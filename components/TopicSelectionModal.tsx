@@ -55,7 +55,7 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
   if (!isOpen) return null;
 
   const selectedTopic = IELTS_TOPICS.find((topic) => topic.id === selectedTopicId) || IELTS_TOPICS[0];
-  const remainingGenerate = Math.max(0, 5 - dailyUsage.generate);
+  const remainingGenerate = Math.max(0, 2 - dailyUsage.generate);
   const isQuotaExhausted = !isAdmin && remainingGenerate <= 0;
 
   return (
@@ -181,7 +181,7 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
             <p className="text-[10px] text-slate-400 mt-1 text-center">
               {isAdmin 
                 ? "管理员无限配额模式 🚀" 
-                : `今日剩余生成额度：${remainingGenerate} / 5 篇`
+                : `今日剩余生成额度：${remainingGenerate} / 2 篇`
               }
             </p>
 

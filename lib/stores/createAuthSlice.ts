@@ -85,7 +85,12 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     ensureDailyUsage();
     const current = get().dailyUsage;
     const currentCount = current[type] || 0;
-    if (currentCount >= limit) {
+    if (type === "import") {
+      if (currentCount >= 5) {
+        toast.error("今日导入额度已用完 (每日限 5 篇)");
+        return false;
+      }
+    } else if (currentCount >= limit) {
       toast.error(message);
       return false;
     }
@@ -230,8 +235,8 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
         if (row.usage_date !== today) return sum;
         return sum + (row.generate_count ?? 0);
       }, 0);
-      if (deviceTotal >= 5) {
-        toast.error("该设备今日生成额度已用完");
+      if (deviceTotal >= 2) {
+        toast.error("该设备今日生成额度已用完 (每日限 2 篇)");
         return false;
       }
       set({ dailyUsage: { ...current, generate: current.generate + 1 } });
@@ -253,14 +258,14 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
       return true;
     },
     checkImportQuota: () =>
-      checkAndIncrement("import", 20, "今日导入额度已用完"),
+      checkAndIncrement("import", 5, "今日导入额度已用完 (每日限 5 篇)"),
     checkChatQuota: () =>
-      checkAndIncrement("chat", 100, "今日咨询额度已用完"),
+      checkAndIncrement("chat", 50, "今日咨询额度已用完 (每日限 50 次)"),
     checkSentenceAnalysisQuota: () =>
       checkAndIncrement(
         "sentenceAnalysisCount",
-        50,
-        "今日 50 句精读分析配额已用完，请优先精读已分析的内容。"
+        15,
+        "今日 15 句精读分析配额已用完，请优先精读已分析的内容。"
       ),
     checkFeedRefreshQuota: () =>
       checkAndIncrement("feedRefresh", 5, "今日刷新次数已达上限 (5次)"),

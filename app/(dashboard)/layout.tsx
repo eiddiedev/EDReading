@@ -15,14 +15,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const ensureDeviceId = useAppStore((state) => state.ensureDeviceId);
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { error } = await supabase.auth.getSession();
-      if (error && (error.message.includes("Refresh Token") || error.message.includes("refresh_token"))) {
-        console.warn("Invalid session detected, signing out...");
-        await supabase.auth.signOut();
-      }
-    };
-    checkSession();
     ensureDailyUsage();
     void ensureDeviceId();
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {

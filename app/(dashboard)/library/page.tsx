@@ -73,6 +73,16 @@ export default function LibraryPage() {
     ensureAdmin: state.ensureAdmin,
   }));
 
+  const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+
+  const FILTER_OPTIONS = [
+    { id: 'CET-4', label: '四级' },
+    { id: 'CET-6', label: '六级' },
+    { id: 'PG-Entrance', label: '考研' },
+    { id: 'IELTS', label: '雅思' },
+    { id: 'TOEFL', label: '托福' },
+  ];
+
   // Use pagedArticles for display instead of store.articles when in 'mine' tab
   // But we must also include local-only articles that haven't been synced or are offline
   const displayArticles = useMemo(() => {
@@ -85,8 +95,19 @@ export default function LibraryPage() {
     const uniqueMap = new Map();
     merged.forEach(item => uniqueMap.set(item.id, item));
     
+    let result = Array.from(uniqueMap.values());
+
+    // Apply Level Filter
+    if (selectedLevel) {
+      result = result.filter(a => 
+        a.difficulty === selectedLevel || 
+        a.level === selectedLevel || 
+        a.tags?.includes(selectedLevel)
+      );
+    }
+
     // Sort by isRead (unread first) then created time desc
-    return Array.from(uniqueMap.values()).sort((a, b) => {
+    return result.sort((a, b) => {
       // 1. Sort by Read status (Unread first = false < true)
       const isReadA = !!a.isRead;
       const isReadB = !!b.isRead;
@@ -96,7 +117,9 @@ export default function LibraryPage() {
       // 2. Sort by Date
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [activeTab, articles, pagedArticles]);
+  }, [activeTab, articles, pagedArticles, selectedLevel]);
+
+  const filteredPublicArticles = publicArticles;
 
   // Sync loaded count to store for scroll restoration support
   useEffect(() => {
@@ -191,13 +214,13 @@ export default function LibraryPage() {
   const fetchPublicLibrary = useCallback(async () => {
     setIsLoadingPublic(true);
     try {
-      await fetchPublicArticles();
+      await fetchPublicArticles(selectedLevel || undefined);
     } catch (e) {
       // toast is handled in store
     } finally {
       setIsLoadingPublic(false);
     }
-  }, [fetchPublicArticles]);
+  }, [fetchPublicArticles, selectedLevel]);
 
   useEffect(() => {
     if (activeTab !== "discover") return;
@@ -386,14 +409,16 @@ export default function LibraryPage() {
           </h1>
           <div className="mt-2 flex items-center gap-4">
             <p className="text-slate-600 dark:text-slate-400">您的阅读收藏</p>
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1 rounded-full shadow-sm border border-slate-200">
-              <span className="text-sm font-medium">
-                📚 阅读进度: <span className="text-primary-600">{readCount}</span> / {totalCount}
-              </span>
-              <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-primary-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+            {activeTab === "mine" && (
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1 rounded-full shadow-sm border border-slate-200">
+                <span className="text-sm font-medium">
+                  📚 阅读进度: <span className="text-primary-600">{readCount}</span> / {totalCount}
+                </span>
+                <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -422,7 +447,7 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-full w-fit mb-6">
+      <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-full w-fit mb-4">
         {[
           { id: "mine", label: "我的文章" },
           { id: "discover", label: "发现" },
@@ -442,6 +467,32 @@ export default function LibraryPage() {
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          onClick={() => setSelectedLevel(null)}
+          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+            !selectedLevel
+              ? "bg-primary-100 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-800"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700"
+          }`}
+        >
+          全部
+        </button>
+        {FILTER_OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            onClick={() => setSelectedLevel(opt.id === selectedLevel ? null : opt.id)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              selectedLevel === opt.id
+                ? "bg-primary-100 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-800"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {activeTab === "mine" && (
         <>
           {isLoadingMine && myArticlesWithStatus.length === 0 ? (
@@ -450,7 +501,7 @@ export default function LibraryPage() {
             </div>
           ) : myArticlesWithStatus.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-              <p className="text-sm">暂无文章，去 AI 生成或导入一篇吧。</p>
+              <p className="text-sm">{selectedLevel ? "该分类下暂无文章" : "暂无文章，去 AI 生成或导入一篇吧。"}</p>
             </div>
           ) : (
             <>
@@ -490,14 +541,20 @@ export default function LibraryPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {publicArticles.map((article) => (
-                <ArticleCard
-                  key={article.id}
-                  article={article}
-                  onAdd={handlePublicAdd}
-                  onAdminDelete={isAdmin ? handleAdminDeletePublic : undefined}
-                />
-              ))}
+              {filteredPublicArticles.length === 0 ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-500">
+                  <p className="text-sm">没有找到相关文章，尝试其他分类或去生成一篇吧。</p>
+                </div>
+              ) : (
+                filteredPublicArticles.map((article) => (
+                  <ArticleCard
+                    key={article.id}
+                    article={article}
+                    onAdd={handlePublicAdd}
+                    onAdminDelete={isAdmin ? handleAdminDeletePublic : undefined}
+                  />
+                ))
+              )}
             </div>
           )}
         </>

@@ -247,6 +247,7 @@ export default function ReaderPage() {
                 </button>
               </div>
               <ImmersiveReader 
+                id={articleId}
                 title={article.title}
                 title_zh={article.title_zh}
                 content={article.content} 

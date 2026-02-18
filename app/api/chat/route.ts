@@ -38,11 +38,11 @@ export async function POST(req: Request) {
     const { userId } = body;
     if (userId) {
       const { checkRateLimit } = await import("@/lib/rate-limit");
-      const rateLimit = await checkRateLimit(userId, "ai_chat");
+      const rateLimit = await checkRateLimit(userId, "ai_chat", 50);
       if (!rateLimit.allowed) {
          return NextResponse.json({ 
           role: "assistant", 
-          content: rateLimit.reason || "今日对话额度已用完，请明天再来。" 
+          content: rateLimit.reason || "今日对话额度已用完 (每日限 50 次)，请明天再来。" 
         });
       }
     }

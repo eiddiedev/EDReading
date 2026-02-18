@@ -33,6 +33,7 @@ interface ImmersiveReaderProps {
   createdAt?: string;
   difficulty?: string;
   onReadComplete?: () => void;
+  id?: string;
 }
 
 import { triggerHaptic } from "@/lib/utils";
@@ -48,7 +49,8 @@ export function ImmersiveReader({
   wordCount, 
   createdAt, 
   difficulty,
-  onReadComplete
+  onReadComplete,
+  id
 }: ImmersiveReaderProps) {
   // State
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -66,17 +68,60 @@ export function ImmersiveReader({
   
   const fontSize = useAppStore((state) => state.fontSize);
   const addVocabulary = useAppStore((state) => state.addVocabulary);
-  const { dailyUsage, ensureDailyUsage, checkSentenceAnalysisQuota, isAdmin } = useAppStore((state) => ({
+  const {
+    dailyUsage,
+    ensureDailyUsage,
+    checkSentenceAnalysisQuota,
+    isAdmin,
+    articleReadProgress,
+    updateArticleReadProgress
+  } = useAppStore((state) => ({
     dailyUsage: state.dailyUsage,
     ensureDailyUsage: state.ensureDailyUsage,
     checkSentenceAnalysisQuota: state.checkSentenceAnalysisQuota,
     isAdmin: state.isAdmin,
+    articleReadProgress: state.articleReadProgress,
+    updateArticleReadProgress: state.updateArticleReadProgress,
   }));
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedWordRef = useRef<string | null>(null);
   const phraseCacheRef = useRef<Record<string, DictionaryResult>>({});
   const hasReadRef = useRef(false);
   const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasRestoredScrollRef = useRef(false);
+
+  // Scroll restoration
+  useEffect(() => {
+    // Reset restored flag when id changes
+    hasRestoredScrollRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    // Restore scroll position when data is ready and id matches
+    if (id && articleReadProgress[id] && !hasRestoredScrollRef.current) {
+      // Use a small timeout to ensure content is rendered
+      const timer = setTimeout(() => {
+        window.scrollTo({
+          top: articleReadProgress[id],
+          behavior: "instant"
+        });
+        hasRestoredScrollRef.current = true;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [id, articleReadProgress]);
+
+  // Save scroll position on unmount or id change
+  useEffect(() => {
+    return () => {
+      if (id) {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        if (scrollTop > 0) {
+          updateArticleReadProgress(id, scrollTop);
+        }
+      }
+    };
+  }, [id, updateArticleReadProgress]);
 
   // Scroll detection for read status
   useEffect(() => {
@@ -121,7 +166,7 @@ export function ImmersiveReader({
     ensureDailyUsage();
   }, [ensureDailyUsage]);
 
-  const remainingSentence = Math.max(0, 50 - dailyUsage.sentenceAnalysisCount);
+  const remainingSentence = Math.max(0, 15 - dailyUsage.sentenceAnalysisCount);
   const isSentenceSelection = Boolean(selectedText && selectedText.includes(" "));
 
   const normalizePhrase = useCallback(
@@ -663,7 +708,7 @@ export function ImmersiveReader({
                     </p>
                     {isSentenceSelection && (
                       <div className="mt-2 text-xs text-slate-400">
-                        {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余配额：${remainingSentence}/50`}
+                        {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余配额：${remainingSentence}/15`}
                       </div>
                     )}
                  </div>

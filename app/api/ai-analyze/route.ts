@@ -99,9 +99,9 @@ export async function POST(req: Request) {
     }
 
     // 🛡️ 2. 第二道防线：Rate Limiting
-    const rateLimit = await checkRateLimit(userId, "analyze_article");
+    const rateLimit = await checkRateLimit(userId, "analyze_article", 5);
     if (!rateLimit.allowed) {
-      return NextResponse.json({ error: rateLimit.reason || "Rate limit exceeded" }, { status: 429 });
+      return NextResponse.json({ error: rateLimit.reason || "今日导入额度已用完 (每日限 2 篇)" }, { status: 429 });
     }
 
     const apiKey = process.env.DEEPSEEK_API_KEY || process.env.AI_API_KEY;

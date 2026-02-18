@@ -21,7 +21,19 @@ export function SessionListener() {
   useEffect(() => {
     // 1. App 启动时，主动去 Supabase 拿最新的 Session
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        // 如果遇到 Refresh Token 错误，强制登出以清除无效状态
+        if (error.message.includes("Refresh Token") || error.message.includes("refresh_token")) {
+          console.warn("Session invalid (Refresh Token Not Found), signing out...");
+          await supabase.auth.signOut();
+          useAppStore.getState().clearUser();
+          router.refresh();
+        }
+        return;
+      }
+
       if (session?.user) {
         // 同步到 Zustand Store
         useAppStore.getState().setUser(session.user);

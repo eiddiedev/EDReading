@@ -68,7 +68,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
     ensureDailyUsage();
   }, [ensureDailyUsage]);
 
-  const remainingSentence = Math.max(0, 50 - dailyUsage.sentenceAnalysisCount);
+  const remainingSentence = Math.max(0, 15 - dailyUsage.sentenceAnalysisCount);
 
   useEffect(() => {
     const locations = rendition?.book?.locations;
@@ -457,7 +457,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
                     &ldquo;{selectedText}&rdquo;
                   </p>
                   <div className="mt-2 text-xs text-slate-400">
-                    {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余配额：${remainingSentence}/50`}
+                    {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余配额：${remainingSentence}/15`}
                   </div>
                 </div>
                 <button

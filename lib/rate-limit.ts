@@ -21,7 +21,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function checkRateLimit(userId: string, endpoint: string = "analyze"): Promise<{ allowed: boolean; reason?: string }> {
+export async function checkRateLimit(userId: string, endpoint: string = "analyze", limit?: number): Promise<{ allowed: boolean; reason?: string }> {
   // 0. Admin Bypass (Infinite Quota)
   if (userId) {
     try {
@@ -78,7 +78,11 @@ export async function checkRateLimit(userId: string, endpoint: string = "analyze
   today.setHours(0, 0, 0, 0);
 
   // Determine limit based on userId
-  const dailyLimit = userId ? 10 : 1;
+  let dailyLimit = limit || (userId ? 10 : 1);
+
+  if (endpoint === "analyze_article") {
+    dailyLimit = 5; // Default for article import
+  }
   const userIdentifier = userId || ip; // Use IP for guests
 
   let query = supabase

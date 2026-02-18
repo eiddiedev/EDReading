@@ -10,7 +10,7 @@ import { ImportModal } from "@/components/notebook/ImportModal";
 import { ReviewSession } from "@/components/notebook/ReviewSession";
 import { ReviewSetupModal } from "@/components/notebook/ReviewSetupModal";
 import { ReviewReminder } from "@/components/notebook/ReviewReminder";
-import { Trash2, Eye, EyeOff, Plus, PlayCircle, BookMarked, Shuffle } from "lucide-react";
+import { Trash2, Eye, EyeOff, Plus, PlayCircle, BookMarked, Shuffle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { VocabularyWord } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,6 +27,11 @@ export default function NotebookPage() {
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [reviewWords, setReviewWords] = useState<VocabularyWord[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredVocabulary = vocabulary.filter(v => 
+    v.word.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     const fetchVocabulary = async (userId: string) => {
@@ -178,7 +183,7 @@ export default function NotebookPage() {
   return (
     <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <ReviewReminder />
-      <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
                 词汇笔记本
@@ -226,6 +231,19 @@ export default function NotebookPage() {
               </motion.button>
             </div>
           </div>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="搜索单词..."
+              className="block w-full pl-10 pr-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg leading-5 bg-white dark:bg-slate-800 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           
           <ReviewSetupModal 
             isOpen={isSetupModalOpen}
@@ -256,96 +274,60 @@ export default function NotebookPage() {
               </p>
             </div>
           ) : (
-            <motion.div layout className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <AnimatePresence mode="popLayout">
-                {vocabulary.map((word) => (
+                {filteredVocabulary.map((word) => (
                   <motion.div
                     layout
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                     key={word.id}
-                    className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:shadow-md transition-shadow"
+                    className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow relative group"
                   >
-                    <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
+                    <div className="flex items-center justify-between mb-2">
                         <div>
-                          <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             {word.word}
-                          </h3>
-                          {word.phonetic && (
-                            <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">
-                              {word.phonetic}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right mr-4">
-                           {(() => {
-                             const reviewCount = word.reviewCount || 0;
-                             const correctCount = word.correctCount || 0;
-                             const accuracy = reviewCount > 0 ? Math.round((correctCount / reviewCount) * 100) : 0;
-                             
-                             let colorClass = "text-slate-400 dark:text-slate-500"; // Default Gray
-                             if (reviewCount > 0) {
-                               if (accuracy >= 80) colorClass = "text-green-500 dark:text-green-400";
-                               else if (accuracy >= 50) colorClass = "text-yellow-500 dark:text-yellow-400";
-                               else colorClass = "text-red-500 dark:text-red-400";
-                             }
-
-                             return (
-                               <div className="text-xs">
-                                  <div className="font-medium text-slate-500 dark:text-slate-400">
-                                    复习: {reviewCount}
-                                  </div>
-                                  <div className={`font-bold ${colorClass}`}>
-                                    {reviewCount > 0 ? `${accuracy}%` : '-'}
-                                  </div>
-                               </div>
-                             );
-                           })()}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeVocabulary(word.id)}
-                      className="text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {showMeanings ? (
-                      <>
-                        <p className="text-slate-700 dark:text-slate-300 font-medium">
-                          {word.definition}
-                        </p>
-                        {word.example && (
-                          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-                            <p className="text-slate-600 dark:text-slate-400 italic text-sm">
-                              &quot;{word.example}&quot;
-                            </p>
-                            {word.exampleTranslation && (
-                              <p className="text-slate-500 dark:text-slate-500 text-sm mt-1">
-                                {word.exampleTranslation}
-                              </p>
+                            {word.phonetic && (
+                                <span className="text-slate-500 dark:text-slate-400 text-sm font-normal font-mono">
+                                {word.phonetic}
+                                </span>
                             )}
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => removeVocabulary(word.id)}
+                          className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="space-y-1">
+                        {showMeanings ? (
+                          <p className="text-slate-700 dark:text-slate-300 text-sm line-clamp-2">
+                            {word.definition}
+                          </p>
+                        ) : (
+                          <div className="h-6 flex items-center justify-start bg-slate-50 dark:bg-slate-900/50 rounded px-2">
+                            <p className="text-slate-400 dark:text-slate-500 text-xs">
+                              释义已隐藏
+                            </p>
                           </div>
                         )}
-                      </>
-                    ) : (
-                      <div className="h-16 flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 rounded border border-slate-100 dark:border-slate-800 border-dashed">
-                        <p className="text-slate-400 dark:text-slate-500 text-sm">
-                          释义已隐藏
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))
-            }
-            </AnimatePresence>
+                    </div>
+                    
+                    {/* Minimal stats indicator */}
+                    <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                       <span>复习: {word.reviewCount || 0}</span>
+                       <span>{(word.reviewCount || 0) > 0 ? `${Math.round(((word.correctCount || 0) / (word.reviewCount || 1)) * 100)}%` : '-'}</span>
+                    </div>
+
+                  </motion.div>
+                ))
+              }
+              </AnimatePresence>
             </motion.div>
           )}
         </main>

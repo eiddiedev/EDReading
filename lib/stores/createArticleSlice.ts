@@ -19,6 +19,7 @@ import { Article } from "@/types";
 export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = (set, get) => ({
   articles: [],
   publicArticles: [],
+  publicFilterLevel: null,
   lastPublicFetch: 0,
   libraryScrollPosition: 0,
   libraryLoadedCount: 0,
@@ -31,22 +32,40 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
   setPagedState: (pagedArticles, pagedHasMore, pagedPage) => set({ pagedArticles, pagedHasMore, pagedPage }),
   resetPagedState: () => set({ pagedArticles: [], pagedHasMore: true, pagedPage: 1, libraryLoadedCount: 0, libraryScrollPosition: 0 }),
   
-  fetchPublicArticles: async () => {
-    const { lastPublicFetch, publicArticles } = get();
+  articleReadProgress: {},
+  updateArticleReadProgress: (id, progress) => set((state) => ({
+    articleReadProgress: {
+      ...state.articleReadProgress,
+      [id]: progress
+    }
+  })),
+  
+  fetchPublicArticles: async (level?: string) => {
+    const { lastPublicFetch, publicArticles, publicFilterLevel } = get();
     const now = Date.now();
-    // Cache hit: fetched < 5 mins ago and has data
-    if (now - lastPublicFetch < 5 * 60 * 1000 && publicArticles.length > 0) {
+    const requestedLevel = level || null;
+    const isFilterChanged = requestedLevel !== publicFilterLevel;
+
+    // Cache hit: fetched < 5 mins ago AND filter is same AND has data
+    if (!isFilterChanged && now - lastPublicFetch < 5 * 60 * 1000 && publicArticles.length > 0) {
       return;
     }
 
     try {
       // Direct Supabase query instead of API to ensure fields
-      const { data, error } = await supabase
+      let query = supabase
         .from("articles")
         .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read, content") // Fetch content for word count check, or use summary if available
         .eq("is_public", true)
         .order("created_at", { ascending: false })
         .limit(50);
+
+      // Apply Level Filter
+      if (requestedLevel) {
+        query = query.or(`difficulty.eq.${requestedLevel},tags.cs.{${requestedLevel}}`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -61,7 +80,11 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
           // Storing 50 articles' content in memory is acceptable for text.
         })
       );
-      set({ publicArticles: normalizedItems, lastPublicFetch: now });
+      set({ 
+        publicArticles: normalizedItems, 
+        lastPublicFetch: now,
+        publicFilterLevel: requestedLevel 
+      });
     } catch (e) {
       console.error("Fetch public articles failed:", e);
       toast.error("发现内容加载失败");

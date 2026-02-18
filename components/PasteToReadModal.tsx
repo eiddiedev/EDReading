@@ -26,13 +26,15 @@ interface PasteToReadModalProps {
 export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModalProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [difficulty, setDifficulty] = useState<"Beginner" | "Intermediate" | "Advanced">("Intermediate");
+  const [difficulty, setDifficulty] = useState<string>("IELTS");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   const difficultyOptions = [
-    { value: "Beginner" as const, label: "初级" },
-    { value: "Intermediate" as const, label: "中级" },
-    { value: "Advanced" as const, label: "高级" },
+    { value: "CET-4", label: "大学四级 (CET-4)" },
+    { value: "CET-6", label: "大学六级 (CET-6)" },
+    { value: "PG-Entrance", label: "考研英语" },
+    { value: "IELTS", label: "雅思 (IELTS)" },
+    { value: "TOEFL", label: "托福 (TOEFL)" },
   ];
   const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota, isAdmin } = useAppStore((state) => ({
     addArticle: state.addArticle,
@@ -42,7 +44,7 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
     isAdmin: state.isAdmin,
   }));
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
-  const remainingImport = Math.max(0, 20 - dailyUsage.import);
+  const remainingImport = Math.max(0, 5 - dailyUsage.import);
 
   useEffect(() => {
     ensureDailyUsage();
@@ -78,12 +80,8 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
         setIsAnalyzing(false);
         return;
       }
-      const levelMap: Record<typeof difficulty, string> = {
-        Beginner: "CET-4",
-        Intermediate: "IELTS",
-        Advanced: "TOEFL",
-      };
-      const aiResult = await analyzeArticleWithAI(content.trim(), user.id, levelMap[difficulty], undefined, title.trim());
+
+      const aiResult = await analyzeArticleWithAI(content.trim(), user.id, difficulty, undefined, title.trim());
 
       const wordCount = content.split(/\s+/).length;
       const newArticle: Article = {
@@ -105,7 +103,7 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
       
       setTitle("");
       setContent("");
-      setDifficulty("Intermediate");
+      setDifficulty("IELTS");
       toast.success("导入成功");
       onSuccess?.();
       onClose();
@@ -166,7 +164,7 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
             <select
               value={difficulty}
               onChange={(e) =>
-                setDifficulty(e.target.value as "Beginner" | "Intermediate" | "Advanced")
+                setDifficulty(e.target.value)
               }
               disabled={isAnalyzing}
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
@@ -188,7 +186,7 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
               disabled={isAnalyzing}
               rows={12}
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:opacity-50"
-              placeholder="在此粘贴文章内容..."
+              placeholder="在此粘贴文章内容......(AI将为你自动去除广告、乱码，提取正文内容并生成相应标题）"
             />
             <div className={`mt-2 text-xs ${wordCount > 3000 ? "text-red-500" : "text-slate-500"}`}>
               Word Count: {wordCount} / 3000
@@ -207,15 +205,17 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
               type="button"
               onClick={handleSubmit}
               disabled={isAnalyzing || wordCount > 3000 || (!isAdmin && remainingImport <= 0)}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 ${isAnalyzing || wordCount > 3000 || (!isAdmin && remainingImport <= 0) ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}
+              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-sm shadow-indigo-200 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[100px] transition-all"
             >
               {isAnalyzing ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  AI 分析中...
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  分析中...
                 </>
+              ) : !isAdmin && remainingImport <= 0 ? (
+                `今日限额已用完`
               ) : (
-                "创建文章"
+                `开始分析 (剩余 ${isAdmin ? "∞" : remainingImport}/5)`
               )}
             </button>
           </div>

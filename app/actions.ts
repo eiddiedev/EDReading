@@ -132,9 +132,9 @@ export async function analyzeArticleWithAI(
   }
 
   // 🛡️ 2. 第二道防线：Rate Limiting (IP & Daily Quota)
-  const rateLimit = await checkRateLimit(userId, "analyze_article");
+  const rateLimit = await checkRateLimit(userId, "analyze_article", 5);
   if (!rateLimit.allowed) {
-    throw new Error(rateLimit.reason || "Rate limit exceeded");
+    throw new Error(rateLimit.reason || "今日导入额度已用完 (每日限 5 篇)");
   }
 
   // ... 以下是正常的 AI 处理逻辑 ...
@@ -171,14 +171,26 @@ export async function analyzeArticleWithAI(
       ? `CRITICAL: The user has explicitly provided the title: "${userTitle}". You MUST use this EXACT string for the "title" field. For "title_zh", provide a direct Simplified Chinese translation of "${userTitle}". Do NOT generate a new title.`
       : `Auto-generate a short, engaging English title for "title", and its Simplified Chinese translation for "title_zh".`;
 
-    const systemPrompt = `You are an expert IELTS/TOEFL exam passage writer and reviewer.
+    const systemPrompt = `You are an expert IELTS/TOEFL exam passage writer and editor.
+    
+    **TASK: Content Import & Cleanup**
+    Your goal is to prepare raw text for a reading app.
+    
+    **CRITICAL CLEANUP RULES:**
+    1. **Remove Gibberish/Noise:** AGGRESSIVELY remove random strings of characters, keyboard mashing, or non-content noise (e.g., "dawuyfdktgaewbfkuwseftugq", "asdfjkl", "123123").
+    2. **Remove Ads/Meta:** Remove "Subscribe", "Read more", URLs, navigation text, and footer content.
+    3. **Fix Formatting:** Ensure proper paragraph spacing and remove excessive line breaks.
+    
     **Reference Level:** ${level}
     **Level Guide:** ${levelGuide[level] || levelGuide.IELTS}
-    **Length Limit:** ${lengthGuide[level] || lengthGuide.IELTS} words
-    **Academic Constraints:** Formal exam tone, no conversational phrases (e.g., "I think"). Use complex logical connectors.
+    **Academic Constraints:** Formal exam tone.
     **Mandatory Keywords:** ${mandatoryKeywords.length > 0 ? mandatoryKeywords.join(", ") : "None"}
     ${titleInstruction}
-    If the input text violates style or length constraints, rewrite it to comply before analyzing.
+    
+    **Optimization Mode:**
+    - Do NOT generate vocabulary lists, phrases, or sentence analysis yet.
+    - ONLY return: title, cleaned content, level, tags.
+    
     Output JSON format:
     {
       "title": "English Title",
@@ -186,9 +198,7 @@ export async function analyzeArticleWithAI(
       "summary": "One sentence summary",
       "level": "CEFR Level (A1-C2)",
       "tags": ["tag1", "tag2"],
-      "vocabulary": [ {"word": "example", "definition": "...", "translation": "..."} ],
-      "phrases": ["phrase 1", "phrase 2"],
-      "sentences": [ {"text": "...", "grammar_point": "..."} ]
+      "content": "The cleaned and processed text content..."
     }`;
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -221,13 +231,14 @@ export async function analyzeArticleWithAI(
 
     const baseTags = Array.isArray(result.tags) ? result.tags : [];
     const finalTags = wasTruncated ? ["⚠️内容超过3500词已截断", ...baseTags] : baseTags;
-    const contentWordCount = countWords(normalizedText);
+    const finalContent = result.content || normalizedText;
+    const contentWordCount = countWords(finalContent);
 
     await supabase.from("articles").insert([{
       id: newArticleId,
       title: result.title,
       title_zh: result.title_zh,
-      content: normalizedText,
+      content: finalContent,
       difficulty: result.level || "Intermediate",
       tags: finalTags,
       is_public: false,
@@ -235,20 +246,20 @@ export async function analyzeArticleWithAI(
       created_at: new Date().toISOString(),
       user_id: userId,
       content_hash: contentHash, // 存储 Hash
-      aiVocabulary: result.vocabulary || [],
-      aiSentences: result.sentences || [],
-      phrases: result.phrases || [],
+      aiVocabulary: [],
+      aiSentences: [],
+      phrases: [],
     }]);
 
     return {
       id: newArticleId,
       title: result.title,
       title_zh: result.title_zh,
-      content: normalizedText,
+      content: finalContent,
       level: result.level,
-      phrases: result.phrases || [],
-      vocabulary: result.vocabulary || [],
-      sentences: result.sentences || [],
+      phrases: [],
+      vocabulary: [],
+      sentences: [],
       tags: finalTags
     };
 

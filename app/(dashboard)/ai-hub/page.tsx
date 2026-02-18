@@ -73,8 +73,8 @@ export default function AIHubPage() {
   }));
   const router = useRouter();
   const wordCount = inputContent.trim() ? inputContent.trim().split(/\s+/).length : 0;
-  const remainingImport = Math.max(0, 20 - dailyUsage.import);
-  const remainingChat = Math.max(0, 100 - dailyUsage.chat);
+  const remainingImport = Math.max(0, 5 - dailyUsage.import);
+  const remainingChat = Math.max(0, 50 - dailyUsage.chat);
   const remainingFeeds = Math.max(0, 5 - (dailyUsage.feedRefresh || 0));
 
   const handleRefresh = useCallback(async () => {
@@ -250,14 +250,15 @@ export default function AIHubPage() {
 
   const handleSave = async () => {
     if (!result) return;
+    const content = result.content || "";
     const newArticle: Article = {
       id: result.id || Date.now().toString(),
       title: result.title || "Imported Article",
       title_zh: result.title_zh,
-      content: result.content,
+      content: content,
       difficulty: result.level || "Intermediate",
       level: result.level,
-      wordCount: result.content.split(/\s+/).length,
+      wordCount: content.split(/\s+/).length,
       createdAt: new Date().toISOString(),
       phrases: result.phrases,
       aiVocabulary: result.vocabulary,
@@ -469,17 +470,33 @@ export default function AIHubPage() {
                                 overLimitRef.current = false;
                               }
                             }}
-                            placeholder="在此粘贴文章内容进行 AI 深度分析..."
+                            placeholder="在此粘贴文章内容......(AI将为你自动去除广告、乱码，提取正文内容并生成相应标题）"
                             className="w-full h-64 p-4 bg-white dark:bg-slate-800 border rounded-xl mb-4 focus:ring-2 focus:ring-indigo-500 resize-none shadow-sm"
                         />
                         <div className={`mb-4 text-xs ${wordCount > 3000 ? "text-red-500" : "text-slate-500"}`}>
                           Word Count: {wordCount} / 3000
                         </div>
-                        <button onClick={handleAnalyze} disabled={isAnalyzing || wordCount > 3000} className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 ${isAnalyzing || wordCount > 3000 ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-indigo-600 text-white"}`}>
-                            {isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />} 开始分析
-                        </button>
-                        <div className="mt-2 text-xs text-slate-400">
-                          {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余导入额度：${remainingImport} 篇`}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="text-sm text-slate-500">
+                                {isAdmin ? "管理员模式 🚀" : `今日剩余：${remainingImport} / 5`}
+                            </div>
+                            <button
+                                onClick={handleAnalyze}
+                                disabled={isAnalyzing || !inputContent.trim() || wordCount > 3000 || (!isAdmin && remainingImport <= 0)}
+                                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 dark:shadow-none"
+                            >
+                                {isAnalyzing ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        AI 分析中...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="w-4 h-4" />
+                                        深度分析
+                                    </>
+                                )}
+                            </button>
                         </div>
                         {result && (
                             <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl p-6 border shadow-sm">

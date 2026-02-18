@@ -72,28 +72,7 @@ Return a STRICT JSON object with the following fields:
 1. "title": Auto-generate a short, engaging English title if the text lacks one.
 2. "title_zh": Translate the title into engaging Simplified Chinese.
 3. "content": The cleaned text.
-4. "phrases": An array of strings. Identify 5-10 key IELTS idioms/collocations (e.g., "account for").
-5. "vocabulary": An array of objects. For each item, generate a JSON object following these ZERO TOLERANCE rules:
-   - "word": The word or phrase.
-   - "phonetic": **REQUIRED**. The International Phonetic Alphabet (IPA) symbol (e.g., /ðə/, /hjuːmən/). If unknown, estimate it.
-   - "definition": **STRICTLY SIMPLIFIED CHINESE (简体中文)**. Do NOT return English definitions. Explain the meaning in the context of the article.
-   - "example": An original example sentence in English.
-   - "exampleTranslation": **STRICTLY SIMPLIFIED CHINESE (简体中文)** translation of the example sentence. **ABSOLUTELY NO SPANISH OR FRENCH.**
-   - "tags": An array of tags in **Simplified Chinese** (e.g., "雅思核心", "学术", "高频", "动词", "名词"). Do not use English tags like "noun".
-
-   **Example Output (Follow this format exactly):**
-   {
-     "word": "paradigm shift",
-     "phonetic": "/ˈpærədaɪm ʃɪft/",
-     "definition": "n. 范式转移；根本性的观念转变",
-     "example": "This discovery marks a paradigm shift in our understanding.",
-     "exampleTranslation": "这一发现标志着我们理解上的一个根本性转变。",
-     "tags": ["雅思核心", "学术词汇"]
-   }
-
-6. "sentences": An array of objects identifying complex sentences with { "original": "...", "translation": "Chinese translation", "structure": "Analysis of the sentence structure in Simplified Chinese" }.
-   CRITICAL INSTRUCTION: The "structure" field in "sentences" MUST BE IN SIMPLIFIED CHINESE (简体中文). Do not use English for the explanation text.
-7. "tags": An array of strings representing the article's category/topic in English (e.g., "Politics", "Technology", "Health", "Culture"). Max 3 tags.
+4. "tags": An array of strings representing the article's category/topic in English (e.g., "Politics", "Technology", "Health", "Culture"). Max 3 tags.
 
 Respond with valid JSON only. Do not include markdown formatting.`;
 
@@ -129,15 +108,9 @@ Respond with valid JSON only. Do not include markdown formatting.`;
         title: result.title || "Untitled Article",
         title_zh: result.title_zh || "",
         content: result.content || text,
-        phrases: Array.isArray(result.phrases) ? result.phrases : [],
-        vocabulary: Array.isArray(result.vocabulary) 
-          ? result.vocabulary.map((v: any) => ({
-              ...v,
-              translation: v.translation || v.definition || "", 
-              definition: v.definition || v.translation || "" 
-            })) 
-          : [],
-        sentences: Array.isArray(result.sentences) ? result.sentences : [],
+        phrases: [],
+        vocabulary: [],
+        sentences: [],
         tags: Array.isArray(result.tags) ? result.tags : [],
       };
     } catch (e) {

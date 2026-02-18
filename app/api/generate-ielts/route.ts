@@ -129,9 +129,9 @@ export async function POST(req: Request) {
 
     // 🛡️ Rate Limiting & Admin Bypass
     const { checkRateLimit } = await import("@/lib/rate-limit");
-    const rateLimit = await checkRateLimit(userId, "generate_ielts");
+    const rateLimit = await checkRateLimit(userId, "generate_ielts", 2);
     if (!rateLimit.allowed) {
-      return NextResponse.json({ error: rateLimit.reason || "今日生成额度已用完" }, { status: 429 });
+      return NextResponse.json({ error: rateLimit.reason || "今日生成额度已用完 (每日限 2 篇)" }, { status: 429 });
     }
 
     const inputSafety = checkContentSafety(String(topicPrompt || ""));
