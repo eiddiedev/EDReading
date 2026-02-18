@@ -16,8 +16,8 @@ EDReading 是一款面向雅思阅读场景的英语阅读与词汇记忆应用�
 
 ## 技术栈
 
-- Web 框架：Next.js 14（App Router, Route Handlers）
-- 前端：React 18、TypeScript、TailwindCSS、framer-motion、lucide-react
+- Web 框架：Next.js 16（App Router, Route Handlers）
+- 前端：React 19.2.4、TypeScript、TailwindCSS、framer-motion、lucide-react
 - 状态管理：Zustand（多 slice + persist）
 - 内容解析/阅读：react-reader、epubjs、@mozilla/readability
 - 后端服务：Supabase（身份、数据库、RLS、边缘执行）
@@ -104,6 +104,7 @@ AI_MODEL=gpt-3.5-turbo
 ```
 
 说明：
+
 - 以 `NEXT_PUBLIC_` 开头的变量会在客户端可见；Service Role Key 仅在服务端 Route Handlers 使用，勿泄露。
 - 未配置任意 AI Key 时，系统将使用 compromise 与本地词库提供兜底能力。
 
@@ -137,6 +138,7 @@ npm start
 ## 故障排除 (Troubleshooting)
 
 ### 1. Supabase 连接问题
+
 - **现象**: 登录失败、数据无法加载或提示 "Auth session missing"。
 - **检查**:
   - 确认 `.env.local` 中 `NEXT_PUBLIC_SUPABASE_URL` 和 `NEXT_PUBLIC_SUPABASE_ANON_KEY` 正确无误。
@@ -144,6 +146,7 @@ npm start
   - 确保 Supabase 项目处于 "Active" 状态且未暂停。
 
 ### 2. AI 功能显示 "Fallback" 或 "模拟结果"
+
 - **现象**: 查词/分析结果简单，包含 "[Fallback]" 或 "[AI Key Missing]" 字样。
 - **原因**: 未配置有效的 AI API Key，系统自动降级到本地 NLP (Compromise) 模式。
 - **解决**:
@@ -152,6 +155,7 @@ npm start
   - 确认 `AI_BASE_URL` 和 `AI_MODEL` 配置正确。
 
 ### 3. 触觉反馈 (Haptics) 不工作
+
 - **现象**: 移动端操作（如长按、点击）无震动反馈。
 - **原因**: 触觉反馈依赖 `navigator.vibrate` API，通常仅在移动设备（手机/平板）上可用。
 - **解决**:
