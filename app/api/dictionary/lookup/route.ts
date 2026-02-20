@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-// 初始化 Supabase (绕过 RLS，确保后端一定能查到)
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -20,67 +20,42 @@ export async function GET(request: Request) {
     auth: { persistSession: false },
   });
 
-  // 定义通用的超时包装器
+  // 定义通用的超时包装器 (2秒)
   const timeoutPromise = (ms: number) => new Promise((_, reject) => 
     setTimeout(() => reject(new Error('Database timeout')), ms)
   );
 
   // --- 核心逻辑 A: 本地数据库优先 (极速模式) ---
-
-  // 尝试 1: 精确查找（带2秒超时）
   let localData = null;
+
+  // 构造词根数组，把时态和复数全部放进去，一次性查询！
+  const stems = [word];
+  if (word.endsWith("s")) stems.push(word.slice(0, -1));
+  if (word.endsWith("es")) stems.push(word.slice(0, -2));
+  if (word.endsWith("ing")) stems.push(word.slice(0, -3));
+  if (word.endsWith("ed")) stems.push(word.slice(0, -2));
+
   try {
-    // 给数据库查询设置 2秒 的硬性死线
+    // 数据库查询：使用 .in 一次性查出所有的词根可能
     const dbQuery = supabase
       .from("dictionary")
       .select("*")
-      .eq("word", word)
+      .in("word", stems)
+      .limit(1)
       .maybeSingle();
 
+    // 强硬的 2 秒超时竞争
     const { data } = await Promise.race([
       dbQuery,
-      timeoutPromise(2000) // 2秒超时
+      timeoutPromise(2000)
     ]) as any;
 
-    localData = data;
+    if (data) localData = data;
   } catch (err) {
     console.warn(`⚠️ [Lookup] DB Timeout/Error for "${word}":`, err);
-    // 超时后，localData 保持为 null，逻辑会自动往下走
   }
 
-  // 尝试 2: 简单词形还原 (如果精确查找失败)
-  // 处理复数 (s/es), 进行时 (ing), 过去式 (ed)
-  if (!localData) {
-    const stems = [];
-    if (word.endsWith("s")) stems.push(word.slice(0, -1));
-    if (word.endsWith("es")) stems.push(word.slice(0, -2));
-    if (word.endsWith("ing")) stems.push(word.slice(0, -3));
-    if (word.endsWith("ed")) stems.push(word.slice(0, -2));
-
-    // 如果有词根，去数据库里“捞”一下（带2秒超时）
-    if (stems.length > 0) {
-      try {
-        const stemQuery = supabase
-          .from("dictionary")
-          .select("*")
-          .in("word", stems)
-          .limit(1)
-          .maybeSingle();
-
-        const { data: stemData } = await Promise.race([
-          stemQuery,
-          timeoutPromise(2000) // 2秒超时
-        ]) as any;
-        
-        if (stemData) localData = stemData;
-      } catch (err) {
-        console.warn(`⚠️ [Lookup] Stem DB Timeout/Error for "${word}" (stems: ${stems.join(',')}):`, err);
-        // 超时后，localData 保持为 null，继续往下走
-      }
-    }
-  }
-
-  // ✅ 命中本地数据：直接返回！不等待任何外部 API！
+  // ✅ 命中本地数据：直接返回！
   if (localData) {
     console.log(`🚀 [Lookup] Local Hit: "${word}" -> "${localData.word}" in ${Date.now() - start}ms`);
     return NextResponse.json({
@@ -92,37 +67,34 @@ export async function GET(request: Request) {
 
   // --- 核心逻辑 B: 本地没有，进入 AI 兜底 (慢速模式) ---
 
-  // 如果客户端明确说不要 AI (include_ai=0)，那就直接 404，别浪费时间
   if (!includeAi) {
     console.warn(`⚠️ [Lookup] Local Miss (No AI): "${word}" in ${Date.now() - start}ms`);
     return NextResponse.json({ error: "Not found locally" }, { status: 404 });
   }
 
-  // 只有在本地查不到 且 用户允许 AI 时，才走这里
   console.log(`🤖 [Lookup] Calling AI for: "${word}"`);
 
   try {
-    // --- AI 查询逻辑 ---
     const apiKey = process.env.DEEPSEEK_API_KEY || process.env.AI_API_KEY;
     const baseUrl = process.env.AI_BASE_URL || "https://api.deepseek.com";
     if (!apiKey) {
-      return NextResponse.json({ error: "Missing API Key" }, { status: 500 });
+      return NextResponse.json({ error: "AI configuration missing" }, { status: 500 });
     }
 
     // 并行执行：DeepSeek + 音频获取
     const deepSeekPromise = callDeepSeek(word, targetLevel, apiKey, baseUrl);
     const audioPromise = callFreeDictionaryApiForAudio(word);
 
-    // 主要等待 DeepSeek 的结果
+    // 等待 AI 结果
     const aiResult = await deepSeekPromise;
 
     if (!aiResult) {
       return NextResponse.json({ error: "AI lookup failed" }, { status: 500 });
     }
 
-    // 尝试获取音频，设置 1.5 秒超时
     let audioUrl: string | null = null;
     try {
+      // 音频获取也加个1.5秒超时防卡死
       const audioResult = await Promise.race([
         audioPromise,
         new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
@@ -134,13 +106,12 @@ export async function GET(request: Request) {
       console.log("Audio fetch timeout/failed, ignoring...");
     }
 
-    // 异步回写数据库（词库自我进化）
     const finalResult = {
       ...aiResult,
       audio: audioUrl,
     };
     
-    // 异步写入，不阻塞响应
+    // 异步写入数据库，不阻塞用户
     writeToSupabase(word, finalResult);
 
     return NextResponse.json({
@@ -161,7 +132,8 @@ export async function GET(request: Request) {
   }
 }
 
-// 辅助函数：从 Free Dictionary API 获取音频
+// ================== 辅助函数区域 ==================
+
 async function callFreeDictionaryApiForAudio(word: string): Promise<string | null> {
   try {
     const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
@@ -253,7 +225,6 @@ Rules:
   }
 }
 
-// 异步将结果写入 Supabase（词库自我进化）
 async function writeToSupabase(word: string, data: any) {
   const serviceUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
