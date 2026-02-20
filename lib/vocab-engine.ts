@@ -1,20 +1,8 @@
 /**
  * 词汇引擎 (Vocab Engine)
-<<<<<<< Updated upstream
  * 作用：处理单词高亮匹配和分级逻辑。
  * 重构：改为基于服务端数据的动态高亮，移除静态 JSON 依赖。
  */
-=======
- * 作用：处理静态词汇的高亮匹配和分级逻辑。
- * 定义：包含核心的 `highlightStaticVocab` 函数和相关类型。
- * 逻辑：
- * 1. `buildIndex`: 将词汇数据库构建为高效查找的 Map 索引，并计算词汇难度分级。
- * 2. `resolveVariant`: 处理单词的形态变化（复数、时态等），实现模糊匹配。
- * 3. `highlightStaticVocab`: 扫描文本，识别出词汇表中的单词，返回匹配位置和元数据。
- */
-import { IELTS_VOCAB_DB } from "@/lib/ielts-vocabulary";
-import type { VocabularyDatabase, VocabularyEntry } from "@/types";
->>>>>>> Stashed changes
 
 export interface WordMetadata {
   word: string;

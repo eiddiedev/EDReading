@@ -9,18 +9,10 @@
  * 4. 动态调整字体、字号、行高和背景色以适应用户偏好。
  */
 "use client";
-<<<<<<< Updated upstream
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { DictionaryResult, AIVocabulary } from "@/types";
 import { lookupLocalDictionary, lookupExternalDictionary, lookupAiDictionary } from "../lib/dictionary";
 import { calculateWordLevel, extractWords, WordMetadata, HighlightLevel } from "../lib/vocab-engine";
-=======
-// 沉浸式阅读器组件
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { DictionaryResult, AIVocabulary } from "@/types";
-import { lookupWord, analyzeSentence } from "../lib/dictionary";
-import { highlightStaticVocab } from "../lib/vocab-engine";
->>>>>>> Stashed changes
 import phrasesData from "../lib/phrases-data.json";
 import { DictionaryModal } from "./DictionaryModal";
 import { WordCardModal } from "./WordCardModal";
@@ -372,7 +364,6 @@ export function ImmersiveReader({
       setIsAiLoading(false);
       setIsRemoteLoading(true);
 
-<<<<<<< Updated upstream
       void (async () => {
         try {
           const remote = await lookupExternalDictionary(cleanWord);
@@ -418,16 +409,6 @@ export function ImmersiveReader({
               setIsAiLoading(false);
             }
           }
-=======
-      // 1. Call lookupWord (handles cache and API)
-      setIsDictionaryLoading(true);
-      setDictionaryResult(null); 
-      
-      try {
-        const result = await lookupWord(cleanWord);
-        if (result && selectedWordRef.current === cleanWord) {
-          setDictionaryResult(result);
->>>>>>> Stashed changes
         }
       } catch (error) {
         console.error("Dictionary lookup failed:", error);
@@ -548,11 +529,7 @@ export function ImmersiveReader({
 
       if (isWord) {
         const cleanWord = selectedText.toLowerCase().replace(/[^\w\s-]/g, "");
-<<<<<<< Updated upstream
         const result = await lookupLocalDictionary(cleanWord);
-=======
-        const result = await lookupWord(cleanWord);
->>>>>>> Stashed changes
         if (result) {
            setAnalysisResult({
              type: "word",
