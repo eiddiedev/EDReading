@@ -1,8 +1,26 @@
+/**
+ * 沉浸式阅读器组件 (ImmersiveReader)
+ * 作用：提供一个无干扰的文本阅读环境，支持逐词/逐句高亮和翻译。
+ * 定义：核心阅读界面，专注于文本内容的展示和交互。
+ * 逻辑：
+ * 1. 接收文章内容，进行分词和排版渲染。
+ * 2. 支持点击单词查询字典，选中句子进行翻译或分析。
+ * 3. 集成 TTS（文本转语音）功能，支持跟随朗读高亮。
+ * 4. 动态调整字体、字号、行高和背景色以适应用户偏好。
+ */
 "use client";
+<<<<<<< Updated upstream
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { DictionaryResult, AIVocabulary } from "@/types";
 import { lookupLocalDictionary, lookupExternalDictionary, lookupAiDictionary } from "../lib/dictionary";
 import { calculateWordLevel, extractWords, WordMetadata, HighlightLevel } from "../lib/vocab-engine";
+=======
+// 沉浸式阅读器组件
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { DictionaryResult, AIVocabulary } from "@/types";
+import { lookupWord, analyzeSentence } from "../lib/dictionary";
+import { highlightStaticVocab } from "../lib/vocab-engine";
+>>>>>>> Stashed changes
 import phrasesData from "../lib/phrases-data.json";
 import { DictionaryModal } from "./DictionaryModal";
 import { WordCardModal } from "./WordCardModal";
@@ -354,6 +372,7 @@ export function ImmersiveReader({
       setIsAiLoading(false);
       setIsRemoteLoading(true);
 
+<<<<<<< Updated upstream
       void (async () => {
         try {
           const remote = await lookupExternalDictionary(cleanWord);
@@ -399,6 +418,16 @@ export function ImmersiveReader({
               setIsAiLoading(false);
             }
           }
+=======
+      // 1. Call lookupWord (handles cache and API)
+      setIsDictionaryLoading(true);
+      setDictionaryResult(null); 
+      
+      try {
+        const result = await lookupWord(cleanWord);
+        if (result && selectedWordRef.current === cleanWord) {
+          setDictionaryResult(result);
+>>>>>>> Stashed changes
         }
       } catch (error) {
         console.error("Dictionary lookup failed:", error);
@@ -519,7 +548,11 @@ export function ImmersiveReader({
 
       if (isWord) {
         const cleanWord = selectedText.toLowerCase().replace(/[^\w\s-]/g, "");
+<<<<<<< Updated upstream
         const result = await lookupLocalDictionary(cleanWord);
+=======
+        const result = await lookupWord(cleanWord);
+>>>>>>> Stashed changes
         if (result) {
            setAnalysisResult({
              type: "word",
