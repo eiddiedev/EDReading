@@ -341,22 +341,6 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)] bg-white dark:bg-slate-900 overflow-hidden">
-      <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
-        <select
-          value={targetLevel || 'ielts'}
-          onChange={(e) => setTargetLevel(e.target.value)}
-          className="bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-        >
-          <option value="zk">中考</option>
-          <option value="gk">高考</option>
-          <option value="cet4">四级</option>
-          <option value="cet6">六级</option>
-          <option value="ky">考研</option>
-          <option value="ielts">雅思</option>
-          <option value="toefl">托福</option>
-        </select>
-      </div>
-
       <ReactReader
         url={url}
         title={title}

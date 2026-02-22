@@ -710,7 +710,7 @@ useEffect(() => {
     // ... (JSX 返回部分保持不变，因为只改了逻辑和 CSS)
     <div className="relative min-h-screen bg-white dark:bg-slate-950 pb-20">
       {/* Level Selector */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+      <div className="flex justify-end mb-4 md:absolute md:top-4 md:right-4 md:mb-0 z-50 items-center gap-2">
         <select
           value={targetLevel || 'ielts'}
           onChange={(e) => setTargetLevel(e.target.value)}
