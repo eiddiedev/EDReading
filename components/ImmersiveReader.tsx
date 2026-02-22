@@ -117,6 +117,7 @@ export function ImmersiveReader({
   useEffect(() => {
     fetchTargetLevel();
   }, [fetchTargetLevel]);
+  const lastFetchedRef = useRef<string>("");
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedWordRef = useRef<string | null>(null);
   const phraseCacheRef = useRef<Record<string, DictionaryResult>>({});
@@ -228,31 +229,53 @@ export function ImmersiveReader({
     return Array.from(new Set(merged));
   }, [articlePhrases, normalizePhrase]);
 
-  useEffect(() => {
+useEffect(() => {
+    // 引入 AbortController 防止快速切换时的无用请求堆积
+    const abortController = new AbortController();
+
     const fetchLevels = async () => {
       if (!content) return;
+      
+      // 构造当前请求的唯一标识
+      const currentRequestKey = `${id || "temp"}-${targetLevel || "ielts"}`;
+
+      // 终极防御：如果当前标识已经成功获取过数据（防止 Strict Mode 双重请求）
+      if (lastFetchedRef.current === currentRequestKey && wordLevels.size > 0) {
+        return;
+      }
+
       try {
         const uniqueWords = extractWords(content);
         if (uniqueWords.length === 0) {
           setWordLevels(new Map());
           return;
         }
-        const cacheKey = `vocab-levels-v3-${id || "temp"}-${targetLevel || "ielts"}`;
+
+        const cacheKey = `vocab-levels-v3-${currentRequestKey}`;
+        
+        // --- 修复 1：读取缓存 ---
         if (typeof window !== "undefined") {
           const cachedData = localStorage.getItem(cacheKey);
           if (cachedData) {
             try {
               const parsed = JSON.parse(cachedData) as [string, HighlightLevel][];
-              setWordLevels(new Map(parsed));
+              if (parsed.length > 0) {
+                setWordLevels(new Map(parsed));
+                lastFetchedRef.current = currentRequestKey; // 标记已加载
+                return; // <--- 关键修复！命中缓存后直接返回，不要再向后端发请求了
+              }
             } catch (error) {
               console.error("Cache parse error", error);
             }
           }
         }
+
+        // --- 修复 2：加入 signal 拦截器 ---
         const response = await fetch('/api/dictionary/levels', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ words: uniqueWords })
+          body: JSON.stringify({ words: uniqueWords }),
+          signal: abortController.signal // 绑定中止信号
         });
 
         if (!response.ok) {
@@ -272,6 +295,8 @@ export function ImmersiveReader({
         });
 
         setWordLevels(levelMap);
+        lastFetchedRef.current = currentRequestKey; // 标记为已成功获取
+
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem(cacheKey, JSON.stringify(Array.from(levelMap.entries())));
@@ -279,13 +304,23 @@ export function ImmersiveReader({
             console.error("Cache write error", error);
           }
         }
-      } catch (error) {
-        console.error('Error fetching word levels:', error);
+      } catch (error: any) {
+        // 忽略因为组件卸载而主动中止的请求报错
+        if (error.name === 'AbortError') {
+          console.log('Fetch aborted to prevent duplicate requests');
+        } else {
+          console.error('Error fetching word levels:', error);
+        }
       }
     };
 
     fetchLevels();
-  }, [content, targetLevel]);
+
+    // 组件卸载或依赖项改变时，取消还在路上的旧请求
+    return () => {
+      abortController.abort();
+    };
+  }, [content, targetLevel, id]); // 加入了 id 依赖，保证切换文章时能正确触发
 
   // ... (phrases regex logic 保持不变)
   const phrasePatterns = useMemo(

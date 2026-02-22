@@ -302,6 +302,11 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
   },
 
   markAsRead: async (id) => {
+    // 【修改】新增防抖/查重拦截：如果已经标为已读，直接跳过，防止造成不必要的 UI 闪烁
+    const state = get();
+    const article = state.articles.find((a) => a.id === id) || state.pagedArticles.find((a) => a.id === id);
+    if (article?.isRead) return;
+
     set((state) => ({
       articles: state.articles.map((a) =>
         a.id === id ? { ...a, isRead: true } : a
@@ -311,9 +316,10 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
       ),
     }));
 
+    // 静默更新云端数据库（不使用 await 阻塞 UI）
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      await supabase.from('articles').update({ is_read: true }).match({ id, user_id: session.user.id });
+      supabase.from('articles').update({ is_read: true }).match({ id, user_id: session.user.id }).then();
     }
   },
 

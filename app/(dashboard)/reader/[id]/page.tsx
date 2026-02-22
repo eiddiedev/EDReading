@@ -42,6 +42,20 @@ export default function ReaderPage() {
   const touchEndRef = useRef<{ x: number; y: number } | null>(null);
   const minSwipeDistance = 150; // 降低灵敏度
 
+  // 【新增】静默记录是否已读完，不触发组件刷新
+  const readCompleteRef = useRef(false);
+
+  // 【新增】拦截退出动作，在动画结束后再更新后台列表
+  useEffect(() => {
+    return () => {
+      if (readCompleteRef.current && articleId) {
+        setTimeout(() => {
+          markAsRead(articleId);
+        }, 300); // 延迟 300ms，让 Next.js 的返回动画平滑过渡完
+      }
+    };
+  }, [articleId, markAsRead]);
+
   useEffect(() => {
     if (!articleId) {
       setIsLoading(false);
@@ -259,7 +273,8 @@ export default function ReaderPage() {
                 createdAt={article.createdAt}
                 difficulty={article.difficulty === "Beginner" ? "初级" : article.difficulty === "Intermediate" ? "中级" : "高级"}
                 onReadComplete={() => {
-                   if (articleId) markAsRead(articleId);
+                   // 【修改】只打上已读标记，不立刻改变全局状态引发重绘
+                   readCompleteRef.current = true;
                 }}
               />
             </>
@@ -282,7 +297,8 @@ export default function ReaderPage() {
                    if (!articleId) return;
                    void updateBookProgress(articleId, loc, progress);
                    if (progress > 0.9) {
-                     markAsRead(articleId);
+                     // 【修改】只打上已读标记，不立刻改变全局状态引发重绘
+                     readCompleteRef.current = true;
                    }
                  }}
                />
