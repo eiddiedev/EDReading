@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import nlp from "compromise";
+import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 
 // Config (simulate env vars for now if needed, or rely on process.env)
 const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
@@ -29,8 +30,8 @@ export async function POST(request: Request) {
     // 1. Try LLM if Key is present
     if (apiKey) {
       try {
-        const result = await callLLM(action, text, context);
-        if (result) return NextResponse.json(result);
+        const result = await callLLMStream(action, text, context);
+        if (result) return result;
       } catch (e) {
         console.error("LLM Call Failed, falling back to local:", e);
       }
@@ -47,15 +48,17 @@ export async function POST(request: Request) {
 }
 
 // --- LLM Implementation ---
-async function callLLM(action: string, text: string, context?: string) {
+async function callLLMStream(action: string, text: string, context?: string) {
   let systemPrompt = "You are an expert English teacher assisting an IELTS student.";
   let userPrompt = "";
+  let responseFormat: { type: "json_object" } | undefined = { type: "json_object" };
+  let parser: (raw: string) => any = (raw) => parseJsonCompletion(raw);
 
   if (action === "extract_phrases") {
     systemPrompt += " Identify key phrases, idioms, and collocations in the text. Return JSON only: { \"phrases\": [\"phrase1\", \"phrase2\"] }.";
     userPrompt = `Analyze this text:\n"${text}"`;
   } else if (action === "analyze_sentence") {
-    systemPrompt += " Analyze the sentence grammar (SVO), provide Chinese translation, and list core vocabulary. Return JSON: { \"structure\": {\"subject\": \"...\", \"verb\": \"...\", \"object\": \"...\"}, \"translation\": \"...\", \"vocabulary\": [\"word1\", \"word2\"], \"grammarExplanation\": \"...\" }.";
+    systemPrompt += " Analyze the sentence grammar (SVO), provide Chinese translation, list core vocabulary, and return important phrase alternatives. Return JSON: { \"structure\": {\"subject\": \"...\", \"verb\": \"...\", \"object\": \"...\"}, \"translation\": \"...\", \"vocabulary\": [\"word1\", \"word2\"], \"grammarExplanation\": \"...\", \"importantPhrases\": [{\"phrase\": \"...\", \"localExpression\": \"...\", \"explanation\": \"...\"}] }.";
     userPrompt = `Analyze this sentence:\n"${text}"`;
   } else if (action === "lookup_word") {
     // Strict Dictionary Mode
@@ -81,6 +84,9 @@ Analyze the target word/phrase in the context of the provided sentence.
 }
 `;
     userPrompt = `Analyze the word "${text}"${context ? ` in this context: "...${context}..."` : ""}.`;
+  } else {
+    responseFormat = undefined;
+    parser = (raw) => ({ content: raw.trim() });
   }
 
   const payload = {
@@ -90,7 +96,8 @@ Analyze the target word/phrase in the context of the provided sentence.
       { role: "user", content: userPrompt },
     ],
     temperature: 0.3,
-    response_format: { type: "json_object" },
+    stream: true,
+    ...(responseFormat ? { response_format: responseFormat } : {}),
   };
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
@@ -103,9 +110,10 @@ Analyze the target word/phrase in the context of the provided sentence.
   });
 
   if (!res.ok) throw new Error(`LLM API Error: ${res.statusText}`);
-  const data = await res.json();
-  const content = data.choices[0].message.content;
-  return JSON.parse(content);
+  return streamOpenAIResponse({
+    upstream: res,
+    parse: parser,
+  });
 }
 
 // --- Local Fallback Implementation ---
@@ -146,6 +154,7 @@ function localFallback(action: string, text: string, context?: string) {
       translation: "[AI Key Missing] 这是一个模拟的翻译结果。请配置 API Key 以获取真实翻译。",
       vocabulary: doc.nouns().out("array").slice(0, 3),
       grammarExplanation: "Detected Subject: " + (subjects[0] || "None") + ", Verb: " + (verbs[0] || "None"),
+      importantPhrases: [],
     };
   }
 

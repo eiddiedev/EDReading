@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { checkContentSafety } from "@/lib/safety";
 import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 
 export const runtime = 'edge';
 
@@ -172,13 +173,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "AI Service Error" }, { status: response.status });
     }
 
-    // Return the stream directly
-    return new Response(response.body, {
-        headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
+    return streamOpenAIResponse({
+      upstream: response,
+      parse: (raw) => parseJsonCompletion<any>(raw),
     });
 
   } catch (error: any) {

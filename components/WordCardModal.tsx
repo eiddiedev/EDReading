@@ -16,6 +16,8 @@ import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { DictionaryResult } from "@/types";
 import { triggerHaptic } from "@/lib/utils";
+import { readStreamedJson } from "@/lib/stream-client";
+import { getCardPreview } from "@/lib/stream-preview";
 
 interface WordCardModalProps {
   isOpen: boolean;
@@ -31,11 +33,14 @@ interface CardGenResult {
 export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [cardContent, setCardContent] = useState<CardGenResult | null>(null);
+  const [streamPreview, setStreamPreview] = useState("");
   const cardRef = useRef<HTMLDivElement>(null);
+  const partialCard = getCardPreview(streamPreview);
 
   const generateCardContent = useCallback(async () => {
     if (!wordData) return;
     setIsLoading(true);
+    setStreamPreview("");
     try {
       const response = await fetch("/api/ai/card-gen", {
         method: "POST",
@@ -48,7 +53,12 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
       
       if (!response.ok) throw new Error("Failed to generate card");
       
-      const data = await response.json();
+      const data = await readStreamedJson<CardGenResult>({
+        response,
+        onDelta: (chunk) => {
+          setStreamPreview((prev) => prev + chunk);
+        },
+      });
       setCardContent(data);
     } catch (error) {
       console.error("Card Gen Error:", error);
@@ -63,6 +73,7 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
       generateCardContent();
     } else {
       setCardContent(null);
+      setStreamPreview("");
     }
   }, [isOpen, wordData, generateCardContent]);
 
@@ -181,9 +192,52 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
               className="p-8 flex flex-col items-center text-center min-h-[400px] justify-center bg-stone-100 dark:bg-stone-900"
             >
               {isLoading ? (
-                <div className="flex flex-col items-center gap-3 text-stone-500">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-                  <p className="text-sm font-medium animate-pulse">Designing your card...</p>
+                <div className="w-full space-y-6">
+                  <div className="flex flex-col items-center gap-3 text-stone-500">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+                    <p className="text-sm font-medium animate-pulse">正在生成卡片...</p>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-3">
+                    {wordData?.tags && wordData.tags[0] && (
+                      <span className="px-3 py-1 rounded-full bg-stone-100 dark:bg-stone-800 text-[10px] uppercase font-bold text-stone-500 dark:text-stone-400 tracking-widest border border-stone-200 dark:border-stone-700">
+                        {wordData.tags[0]}
+                      </span>
+                    )}
+                    <h2 className="text-5xl font-serif font-bold text-stone-900 dark:text-stone-100 tracking-tight">
+                      {wordData?.word}
+                    </h2>
+                    <span className="text-stone-500 font-mono text-base tracking-wider">
+                      {wordData?.phonetic}
+                    </span>
+                  </div>
+
+                  <div className="w-12 h-1 bg-primary-500/30 mx-auto rounded-full" />
+
+                  <p className="text-stone-700 dark:text-stone-300 font-medium leading-relaxed">
+                    {wordData?.definition}
+                  </p>
+
+                  {partialCard && (
+                    <div className="relative mt-6 pt-6 border-t border-stone-200 dark:border-stone-800">
+                      <Quote className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-primary-500 fill-primary-100 dark:fill-primary-900/30 bg-stone-100 dark:bg-stone-900" />
+                      <blockquote className="space-y-3">
+                        {partialCard.sentence && (
+                          <p className="font-serif text-lg text-stone-800 dark:text-stone-200 italic leading-relaxed">
+                            &ldquo;{partialCard.sentence}&rdquo;
+                          </p>
+                        )}
+                        <p className="text-xs text-stone-500 dark:text-stone-500 font-medium tracking-wide uppercase">
+                          — The Economist Style
+                        </p>
+                        {partialCard.translation && (
+                          <p className="text-sm text-stone-600 dark:text-stone-400 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-3">
+                            {partialCard.translation}
+                          </p>
+                        )}
+                      </blockquote>
+                    </div>
+                  )}
                 </div>
               ) : wordData && cardContent ? (
                 <div className="w-full space-y-6">
@@ -240,7 +294,7 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
                 className="flex-1 py-3 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-95 duration-100 touch-manipulation disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
-                Save Card
+                保存卡片
               </button>
               <button
                 onClick={handleShare}

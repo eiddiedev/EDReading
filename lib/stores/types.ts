@@ -37,7 +37,7 @@ export interface AuthSlice {
 
 export interface ReviewSlice {
   vocabulary: VocabularyWord[];
-  addVocabulary: (word: VocabularyWord) => Promise<void>;
+  addVocabulary: (word: VocabularyWord) => Promise<boolean>;
   removeVocabulary: (id: string) => Promise<void>;
   incrementReviewCount: (id: string, isCorrect?: boolean) => Promise<void>;
   setVocabulary: (words: VocabularyWord[]) => void;

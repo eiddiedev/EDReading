@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { checkContentSafety } from '@/lib/safety';
 import { IELTS_VOCAB_DB } from '@/lib/ielts-vocabulary';
 import type { VocabularyCategory, VocabularyDatabase } from '@/types';
+import { parseJsonCompletion, streamOpenAIResponse } from '@/lib/ai-stream';
 
 // --- 配置区域 ---
 
@@ -228,53 +229,48 @@ export async function POST(req: Request) {
 
     if (!response.ok) throw new Error(`AI API Error: ${response.status}`);
 
-    const data = await response.json();
-    const contentStr = data.choices[0].message.content.replace(/```json/g, "").replace(/```/g, "").trim();
-    let aiResult;
-    try {
-      aiResult = JSON.parse(contentStr);
-    } catch (e) {
-      console.error("JSON Parse Error", e);
-      throw new Error("AI生成格式错误");
-    }
+    return streamOpenAIResponse({
+      upstream: response,
+      parse: (raw) => parseJsonCompletion<any>(raw),
+      onDone: async (aiResult) => {
+        const outputSafety = checkContentSafety(`${aiResult.content || ""} ${aiResult.title || ""}`);
+        if (!outputSafety.isSafe) {
+          throw new Error("生成内容未通过安全审查，请重试。");
+        }
 
-    const outputSafety = checkContentSafety(`${aiResult.content || ""} ${aiResult.title || ""}`);
-    if (!outputSafety.isSafe) {
-      return NextResponse.json({ error: "生成内容未通过安全审查，请重试。" }, { status: 400 });
-    }
+        const finalArticleData = {
+          id: crypto.randomUUID(),
+          title: aiResult.title,
+          title_zh: aiResult.title_zh,
+          content: aiResult.content,
+          topic: specificTopic,
+          difficulty: level,
+          level,
+          tags: aiResult.tags,
+          user_id: userId,
+          is_public: true,
+        };
 
-    // --- 5. 存入公共库 (Public Share) ---
-    const finalArticleData = {
-        id: crypto.randomUUID(),
-        title: aiResult.title,
-        title_zh: aiResult.title_zh,
-        content: aiResult.content,
-        topic: specificTopic, // 存入细分主题
-        difficulty: level,
-        level: level,
-        tags: aiResult.tags,
-        user_id: userId,
-        is_public: true, 
-    };
+        let savedArticle = null;
+        try {
+          const { data: inserted, error: insertError } = await supabase
+            .from('articles')
+            .insert([finalArticleData])
+            .select('*')
+            .single();
+          if (insertError) throw insertError;
+          savedArticle = inserted;
+        } catch (dbError) {
+          console.error("Cache failed:", dbError);
+        }
 
-    let savedArticle = null;
-    try {
-        const { data: inserted, error: insertError } = await supabase
-          .from('articles')
-          .insert([finalArticleData])
-          .select('*')
-          .single();
-        if (insertError) throw insertError;
-        savedArticle = inserted;
-    } catch (dbError) {
-        console.error("Cache failed:", dbError);
-    }
+        if (savedArticle) {
+          return { ...savedArticle, ...aiResult };
+        }
 
-    if (savedArticle) {
-      return NextResponse.json({ ...savedArticle, ...aiResult });
-    }
-
-    return NextResponse.json({ ...finalArticleData, ...aiResult });
+        return { ...finalArticleData, ...aiResult };
+      },
+    });
 
   } catch (error: any) {
     console.error("Gen Error:", error);

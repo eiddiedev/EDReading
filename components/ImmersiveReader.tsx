@@ -11,7 +11,7 @@
 "use client";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { DictionaryResult, AIVocabulary } from "@/types";
-import { lookupLocalDictionary, lookupExternalDictionary, lookupAiDictionary } from "../lib/dictionary";
+import { lookupLocalDictionary, lookupExternalDictionary } from "../lib/dictionary";
 import { calculateWordLevel, extractWords, WordMetadata, HighlightLevel } from "../lib/vocab-engine";
 import phrasesData from "../lib/phrases-data.json";
 import { DictionaryModal } from "./DictionaryModal";
@@ -20,6 +20,8 @@ import { useAppStore } from "@/lib/store";
 import { Sparkles, Loader2, X, BookOpen, GraduationCap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { triggerHaptic } from "@/lib/utils";
+import { readStreamedJson } from "@/lib/stream-client";
+import { getSentenceAnalysisPreview } from "@/lib/stream-preview";
 
 // ... (接口定义保持不变)
 interface ImmersiveReaderProps {
@@ -57,12 +59,14 @@ export function ImmersiveReader({
   const [remoteResult, setRemoteResult] = useState<DictionaryResult | null>(null);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [dictionaryStreamText, setDictionaryStreamText] = useState("");
   
   // Selection & Analysis State
   const [selectedText, setSelectedText] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+  const [analysisStreamText, setAnalysisStreamText] = useState("");
   const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
   const [showWordCard, setShowWordCard] = useState(false);
   const [wordCardData, setWordCardData] = useState<DictionaryResult | null>(null);
@@ -192,6 +196,7 @@ export function ImmersiveReader({
 
   const remainingSentence = Math.max(0, 15 - dailyUsage.sentenceAnalysisCount);
   const isSentenceSelection = Boolean(selectedText && selectedText.includes(" "));
+  const analysisPreview = getSentenceAnalysisPreview(analysisStreamText);
 
   const normalizePhrase = useCallback(
     (phrase: string) =>
@@ -397,6 +402,7 @@ useEffect(() => {
       setLocalResult(null);
       setRemoteResult(null);
       setIsAiLoading(false);
+      setDictionaryStreamText("");
       setIsRemoteLoading(true);
 
       void (async () => {
@@ -428,8 +434,16 @@ useEffect(() => {
               isAiGenerated: true, // 标记为 AI，让 Modal 知道如何显示
             });
             setIsAiLoading(true);
-            
-            const aiResult = await lookupAiDictionary(cleanWord, targetLevel || "ielts");
+
+            const response = await fetch(
+              `/api/dictionary/lookup?word=${encodeURIComponent(cleanWord)}&include_ai=1&target_level=${encodeURIComponent(targetLevel || "ielts")}`
+            );
+            const aiResult = await readStreamedJson<DictionaryResult>({
+              response,
+              onDelta: (chunk) => {
+                setDictionaryStreamText((prev) => prev + chunk);
+              },
+            });
             if (selectedWordRef.current === cleanWord) {
               if (aiResult) {
                 setLocalResult(aiResult);
@@ -475,6 +489,7 @@ useEffect(() => {
     setRemoteResult(null);
     setIsRemoteLoading(false);
     setIsAiLoading(false);
+    setDictionaryStreamText("");
 
     const cacheKey = cleanPhrase.toLowerCase();
     const cached = phraseCacheRef.current[cacheKey];
@@ -495,8 +510,12 @@ useEffect(() => {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to analyze phrase");
-      const data = await response.json();
+      const data = await readStreamedJson<any>({
+        response,
+        onDelta: (chunk) => {
+          setDictionaryStreamText((prev) => prev + chunk);
+        },
+      });
       const result: DictionaryResult = {
         word: cleanPhrase,
         definition: data.definition,
@@ -561,6 +580,7 @@ useEffect(() => {
 
       setIsAnalyzing(true);
       setAnalysisResult(null);
+      setAnalysisStreamText("");
 
       if (isWord) {
         const cleanWord = selectedText.toLowerCase().replace(/[^\w\s-]/g, "");
@@ -584,9 +604,12 @@ useEffect(() => {
         })
       });
 
-      if (!response.ok) throw new Error("Analysis failed");
-      
-      const data = await response.json();
+      const data = await readStreamedJson<any>({
+        response,
+        onDelta: (chunk) => {
+          setAnalysisStreamText((prev) => prev + chunk);
+        },
+      });
       setAnalysisResult({
         type: type,
         data: data
@@ -625,6 +648,7 @@ useEffect(() => {
     setRemoteResult(null);
     setIsRemoteLoading(false);
     setIsAiLoading(false);
+    setDictionaryStreamText("");
     setSelectedWord(null);
     setHighlightedWord(null);
   };
@@ -839,7 +863,7 @@ useEffect(() => {
                   className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-transform active:scale-95 duration-100 touch-manipulation shadow-sm"
                 >
                   <Sparkles size={18} />
-                  Analyze This
+                  开始分析
                 </button>
               )}
 
@@ -847,12 +871,98 @@ useEffect(() => {
                 <div className="space-y-4 py-4">
                    <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-medium animate-pulse">
                       <Loader2 className="animate-spin" />
-                      Analyzing...
+                      分析中...
                    </div>
-                   <div className="space-y-2">
-                      <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-3/4 animate-pulse" />
-                      <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/2 animate-pulse" />
-                   </div>
+                   {analysisPreview ? (
+                      <div className="space-y-5">
+                        {analysisPreview.translation && (
+                          <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900/30">
+                            <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">中文翻译</h4>
+                            <p className="text-lg text-slate-800 dark:text-slate-200">
+                              {analysisPreview.translation}
+                            </p>
+                          </div>
+                        )}
+
+                        {(analysisPreview.structure || analysisPreview.grammarExplanation) && (
+                          <div>
+                            <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
+                              <GraduationCap size={16} />
+                              语法解析
+                            </h4>
+                            {analysisPreview.structure && (
+                              <div className="flex flex-wrap gap-2 mb-4 text-sm">
+                                {analysisPreview.structure.subject && (
+                                  <span className="px-2 py-1 rounded bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">
+                                    <b>S:</b> {analysisPreview.structure.subject}
+                                  </span>
+                                )}
+                                {analysisPreview.structure.verb && (
+                                  <span className="px-2 py-1 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
+                                    <b>V:</b> {analysisPreview.structure.verb}
+                                  </span>
+                                )}
+                                {analysisPreview.structure.object && (
+                                  <span className="px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                    <b>O:</b> {analysisPreview.structure.object}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {analysisPreview.grammarExplanation && (
+                              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
+                                {analysisPreview.grammarExplanation}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {analysisPreview.vocabulary && analysisPreview.vocabulary.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重点词汇</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {analysisPreview.vocabulary.map((w: string) => (
+                                <span key={w} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm rounded-md border border-slate-200 dark:border-slate-700">
+                                  {w}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {analysisPreview.importantPhrases && analysisPreview.importantPhrases.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重要短语与地道表达</h4>
+                            <div className="space-y-3">
+                              {analysisPreview.importantPhrases.map((item, index) => (
+                                <div key={`${item.phrase || "phrase"}-${index}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                                  {item.phrase && (
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                      {item.phrase}
+                                    </p>
+                                  )}
+                                  {item.localExpression && (
+                                    <p className="mt-1 text-sm text-primary-600 dark:text-primary-400">
+                                      地道表达：{item.localExpression}
+                                    </p>
+                                  )}
+                                  {item.explanation && (
+                                    <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                                      {item.explanation}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                   ) : (
+                      <div className="space-y-2">
+                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-3/4 animate-pulse" />
+                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/2 animate-pulse" />
+                      </div>
+                   )}
                 </div>
               )}
 
@@ -900,7 +1010,7 @@ useEffect(() => {
                          className="w-full py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
                        >
                          <BookOpen size={16} />
-                         Add to Notebook
+                         加入生词本
                        </button>
                     </div>
                   ) : (
@@ -908,7 +1018,7 @@ useEffect(() => {
                     <div className="space-y-5">
                        {/* Translation */}
                        <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900/30">
-                          <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">Translation</h4>
+                          <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">中文翻译</h4>
                           <p className="text-lg text-slate-800 dark:text-slate-200">
                              {analysisResult.data.translation}
                           </p>
@@ -918,7 +1028,7 @@ useEffect(() => {
                        <div>
                           <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
                              <GraduationCap size={16} />
-                             Grammar Analysis
+                             语法解析
                           </h4>
                           
                           {/* SVO Structure if available */}
@@ -944,12 +1054,39 @@ useEffect(() => {
                        {/* Vocabulary */}
                        {analysisResult.data.vocabulary && analysisResult.data.vocabulary.length > 0 && (
                           <div>
-                             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Key Vocabulary</h4>
+                             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重点词汇</h4>
                              <div className="flex flex-wrap gap-2">
                                 {analysisResult.data.vocabulary.map((w: string) => (
                                    <span key={w} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm rounded-md border border-slate-200 dark:border-slate-700">
                                       {w}
                                    </span>
+                                ))}
+                             </div>
+                          </div>
+                       )}
+
+                       {analysisResult.data.importantPhrases && analysisResult.data.importantPhrases.length > 0 && (
+                          <div>
+                             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重要短语与地道表达</h4>
+                             <div className="space-y-3">
+                                {analysisResult.data.importantPhrases.map((item: any, index: number) => (
+                                   <div key={`${item.phrase || "phrase"}-${index}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                                      {item.phrase && (
+                                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                          {item.phrase}
+                                        </p>
+                                      )}
+                                      {item.localExpression && (
+                                        <p className="mt-1 text-sm text-primary-600 dark:text-primary-400">
+                                          地道表达：{item.localExpression}
+                                        </p>
+                                      )}
+                                      {item.explanation && (
+                                        <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                                          {item.explanation}
+                                        </p>
+                                      )}
+                                   </div>
                                 ))}
                              </div>
                           </div>
@@ -969,6 +1106,7 @@ useEffect(() => {
         remoteResult={remoteResult}
         isRemoteLoading={isRemoteLoading}
         isAiLoading={isAiLoading}
+        streamText={dictionaryStreamText}
         currentWord={selectedWord || undefined}
         onClose={closeModal}
         onAddToNotebook={handleAddToNotebook}

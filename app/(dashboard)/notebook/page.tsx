@@ -14,6 +14,7 @@ import { Trash2, Eye, EyeOff, Plus, PlayCircle, BookMarked, Shuffle, Search } fr
 import { toast } from "sonner";
 import { VocabularyWord } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
+import { readStreamedJson } from "@/lib/stream-client";
 
 export default function NotebookPage() {
   const vocabulary = useAppStore((state) => state.vocabulary);
@@ -28,6 +29,7 @@ export default function NotebookPage() {
   const [reviewWords, setReviewWords] = useState<VocabularyWord[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [importStreamPreview, setImportStreamPreview] = useState("");
 
   const filteredVocabulary = vocabulary.filter(v => 
     v.word.toLowerCase().includes(searchQuery.toLowerCase())
@@ -130,53 +132,101 @@ export default function NotebookPage() {
     setIsReviewSessionOpen(true);
   };
 
-  const handleImport = async (words: string[]) => {
+  const handleImport = async (rawInput: string) => {
     setIsProcessing(true);
-    const toastId = toast.loading(`🤖 AI is analyzing ${words.length} words...`);
+    setImportStreamPreview("");
+    const toastId = toast.loading("AI 正在识别并导入单词...");
 
     try {
       const res = await fetch("/api/batch-process-words", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words }),
+        body: JSON.stringify({ rawInput }),
       });
 
-      if (!res.ok) throw new Error("Processing failed");
-
-      const data = await res.json();
+      const data = await readStreamedJson<{ results: any[] }>({
+        response: res,
+        onDelta: (chunk) => {
+          setImportStreamPreview((prev) => prev + chunk);
+        },
+      });
       
       // Map API result to VocabularyWord type
       // Schema from API: { text, phonetic, definition, translation, example, tags }
       // Schema for Store: { id, word, phonetic, definition, example, exampleTranslation, createdAt, reviewCount }
       
+      const existingWords = new Set(
+        vocabulary.map((item) => item.word.trim().toLowerCase())
+      );
+      const importedWords = new Set<string>();
+
       let addedCount = 0;
+      let failedCount = 0;
+      let skippedCount = 0;
       if (data.results && Array.isArray(data.results)) {
-        data.results.forEach((item: any) => {
+        for (const item of data.results) {
+           const normalizedWord = String(item.text || item.word || "")
+             .trim()
+             .replace(/\s+/g, " ")
+             .toLowerCase();
+
+           if (!normalizedWord) {
+             return;
+           }
+
+           if (existingWords.has(normalizedWord) || importedWords.has(normalizedWord)) {
+             skippedCount += 1;
+             return;
+           }
+
            const newWord: VocabularyWord = {
              id: crypto.randomUUID(), // Use standard UUID
-             word: item.text || item.word, // Fallback
+             word: String(item.text || item.word).trim().replace(/\s+/g, " "),
              phonetic: item.phonetic,
-             definition: item.definition,
+             definition: item.definition || item.translation || "未提供释义",
              example: item.example,
              exampleTranslation: item.translation || item.exampleTranslation,
              createdAt: new Date().toISOString(),
              reviewCount: 0,
              correctCount: 0,
-             // We can store tags if we add it to the schema later, currently ignored or we can put in definition?
-             // Let's keep it simple for now.
+             tags: Array.isArray(item.tags) ? item.tags : [],
            };
-           addVocabulary(newWord);
-           addedCount++;
-        });
+           importedWords.add(normalizedWord);
+           const ok = await addVocabulary(newWord);
+           if (ok) {
+             addedCount++;
+           } else {
+             failedCount++;
+             importedWords.delete(normalizedWord);
+           }
+        }
       }
 
-      toast.success(`Successfully imported ${addedCount} words!`, { id: toastId });
+      if (addedCount === 0) {
+        if (failedCount > 0) {
+          toast.error("识别到了词条，但写入生词本失败。请优先检查 dev 数据库的 vocabulary 表结构和 RLS。", { id: toastId });
+        } else {
+          toast.error("没有识别到可导入的新单词。", { id: toastId });
+        }
+        return;
+      }
+
+      let successMessage = `已成功导入 ${addedCount} 个词条`;
+      if (skippedCount > 0) {
+        successMessage += `，跳过 ${skippedCount} 个重复词`;
+      }
+      if (failedCount > 0) {
+        successMessage += `，另有 ${failedCount} 个写入失败`;
+      }
+
+      toast.success(successMessage, { id: toastId });
       setIsImportModalOpen(false);
     } catch (error) {
       console.error(error);
-      toast.error("Import failed. Please try again.", { id: toastId });
+      toast.error("导入失败，请稍后重试。", { id: toastId });
     } finally {
       setIsProcessing(false);
+      setImportStreamPreview("");
     }
   };
 
@@ -257,6 +307,7 @@ export default function NotebookPage() {
             onClose={() => setIsImportModalOpen(false)}
             onImport={handleImport}
             isLoading={isProcessing}
+            streamPreview={importStreamPreview}
             existingWords={vocabulary.map(v => v.word.toLowerCase())}
           />
 

@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkContentSafety } from "@/lib/safety";
+import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 
 const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
 const isDeepSeek = !process.env.AI_API_KEY && !!process.env.DEEPSEEK_API_KEY;
@@ -106,8 +107,37 @@ Analyze the target word/phrase in the context of the provided sentence.
 `;
       userPrompt = `Analyze the phrase "${selection}"${context ? ` in this context: "...${context}..."` : ""}.`;
     } else {
-      systemPrompt += " Analyze the sentence grammar (SVO), provide Chinese translation, and list core vocabulary. Return JSON: { \"structure\": {\"subject\": \"...\", \"verb\": \"...\", \"object\": \"...\"}, \"translation\": \"...\", \"vocabulary\": [\"word1\", \"word2\"], \"grammarExplanation\": \"...\" }.";
-      userPrompt = `Analyze this sentence:\n"${selection}"${context ? `\nContext: "...${context}..."` : ""}`;
+      systemPrompt = `
+你是一名资深英语阅读讲师，请对句子做中文导向的精读分析。
+
+**输出要求：**
+1. \`translation\`：给出自然、准确的简体中文翻译。
+2. \`structure\`：提炼句子的主语、谓语、宾语/核心补足信息。
+3. \`grammarExplanation\`：用简体中文解释句子结构、从句、非谓语、修饰关系等重点。
+4. \`vocabulary\`：提取 2-6 个理解本句最关键的单词或短语。
+5. \`importantPhrases\`：如果句中有值得积累的重要短语、搭配或表达，返回数组；如果没有，返回空数组。
+6. \`importantPhrases[].localExpression\`：给出一个更地道、更口语化或更常见的英文表达方式。
+7. \`importantPhrases[].explanation\`：用简体中文简短说明这个短语在原句中的意思或语气。
+
+**JSON 格式：**
+{
+  "structure": {
+    "subject": "...",
+    "verb": "...",
+    "object": "..."
+  },
+  "translation": "中文翻译",
+  "vocabulary": ["word1", "word2"],
+  "grammarExplanation": "中文语法解析",
+  "importantPhrases": [
+    {
+      "phrase": "原句中的重要短语",
+      "localExpression": "更地道的英文表达",
+      "explanation": "中文说明"
+    }
+  ]
+}`;
+      userPrompt = `请分析这个句子：\n"${selection}"${context ? `\n上下文："...${context}..."` : ""}`;
     }
 
     const payload = {
@@ -117,6 +147,7 @@ Analyze the target word/phrase in the context of the provided sentence.
         { role: "user", content: userPrompt },
       ],
       temperature: 0.3,
+      stream: true,
       response_format: { type: "json_object" },
     };
 
@@ -143,24 +174,25 @@ Analyze the target word/phrase in the context of the provided sentence.
         throw new Error(`AI API Error: ${res.statusText} (${res.status})`);
       }
 
-      const data = await res.json();
-      let content = data.choices[0].message.content;
-      content = content.replace(/```json/g, "").replace(/```/g, "").trim();
-      const aiResult = JSON.parse(content);
+      return streamOpenAIResponse({
+        upstream: res,
+        parse: (raw) => parseJsonCompletion<any>(raw),
+        onDone: async (aiResult) => {
+          if (type === "word" && aiResult) {
+            await supabase.from("public_dictionary").upsert({
+              word: cleanWord,
+              phonetic: aiResult.phonetic,
+              definition: aiResult.definition,
+              translation: aiResult.translation || aiResult.definition,
+              example: aiResult.example,
+              example_zh: aiResult.exampleTranslation,
+              tags: aiResult.tags,
+            });
+          }
 
-      if (type === "word" && aiResult) {
-        await supabase.from("public_dictionary").upsert({
-          word: cleanWord,
-          phonetic: aiResult.phonetic,
-          definition: aiResult.definition,
-          translation: aiResult.translation,
-          example: aiResult.example,
-          example_zh: aiResult.exampleTranslation,
-          tags: aiResult.tags,
-        });
-      }
-
-      return NextResponse.json(aiResult);
+          return aiResult;
+        },
+      });
     } catch (fetchError: any) {
       clearTimeout(timeoutId);
       if (fetchError.name === "AbortError") {

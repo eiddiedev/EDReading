@@ -3,6 +3,7 @@
  */
 import { NextResponse } from 'next/server';
 import { checkContentSafety } from "@/lib/safety";
+import { streamOpenAIResponse } from "@/lib/ai-stream";
 
 /**
  * 英语学习助手的聊天接口。
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
         model: "deepseek-chat", // 或者你配置的其他模型
         messages: apiMessages,
         temperature: 0.7, // 稍微降低温度，让它更严谨
-        stream: false // 暂时关闭流式传输，保证稳定性
+        stream: true
       }),
     });
 
@@ -103,10 +104,13 @@ export async function POST(req: Request) {
       throw new Error(`AI Service Error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const aiMessage = data.choices[0].message;
-
-    return NextResponse.json(aiMessage);
+    return streamOpenAIResponse({
+      upstream: response,
+      parse: (raw) => ({
+        role: "assistant",
+        content: raw.trim(),
+      }),
+    });
 
   } catch (error: any) {
     console.error("Chat Error:", error);

@@ -15,12 +15,14 @@ import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
 import { useAppStore } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
+import { getDictionaryPreview } from "@/lib/stream-preview";
 
 interface SimpleDictionaryModalProps {
   result: DictionaryResult | null;
   isLoading?: boolean;
   isRemoteLoading?: boolean;
   isAiLoading?: boolean;
+  streamText?: string;
   onClose: () => void;
   onAddToNotebook: (word: DictionaryResult) => void;
 }
@@ -30,11 +32,13 @@ export function SimpleDictionaryModal({
   isLoading = false,
   isRemoteLoading = false,
   isAiLoading = false,
+  streamText = "",
   onClose,
   onAddToNotebook,
 }: SimpleDictionaryModalProps) {
   const vocabulary = useAppStore((state) => state.vocabulary);
   const [isSaved, setIsSaved] = useState(false);
+  const previewResult = getDictionaryPreview(streamText, result?.word);
 
   // 监听结果变化，检查单词是否已经收藏过
   useEffect(() => {
@@ -76,17 +80,57 @@ export function SimpleDictionaryModal({
   // 渲染内容区域
   const renderContent = () => {
     if (isLoading) {
+      const liveResult = { ...(result || {}), ...(previewResult || {}) } as DictionaryResult;
       return (
-        <div className="flex flex-col items-center justify-center py-12">
+        <div className="py-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin" />
             <div className="text-lg font-medium text-slate-700 dark:text-slate-300">
               查询中...
             </div>
           </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm animate-pulse">
-            正在获取单词释义和例句
-          </p>
+          {previewResult ? (
+            <div className="space-y-4">
+              {liveResult.word && (
+                <div className="flex items-baseline gap-3">
+                  <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100">
+                    {liveResult.word}
+                  </h2>
+                  {liveResult.phonetic && (
+                    <span className="text-slate-500 dark:text-slate-400 font-mono text-lg">
+                      {liveResult.phonetic}
+                    </span>
+                  )}
+                </div>
+              )}
+              {liveResult.cnDefinition && (
+                <p className="text-xl text-slate-800 dark:text-slate-200 font-semibold">
+                  {liveResult.cnDefinition}
+                </p>
+              )}
+              {liveResult.definition && (
+                <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed">
+                  {liveResult.definition}
+                </p>
+              )}
+              {liveResult.example && (
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                  <p className="text-slate-700 dark:text-slate-300 italic mb-2 font-serif">
+                    &quot;{liveResult.example}&quot;
+                  </p>
+                  {liveResult.exampleTranslation && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {liveResult.exampleTranslation}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-slate-500 dark:text-slate-400 text-sm animate-pulse">
+              正在获取单词释义和例句
+            </p>
+          )}
         </div>
       );
     }

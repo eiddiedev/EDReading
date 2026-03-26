@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
 import { useAppStore } from "@/lib/store";
 import { motion, AnimatePresence, PanInfo, useDragControls } from "framer-motion";
+import { getDictionaryPreview } from "@/lib/stream-preview";
 
 interface DictionaryModalProps {
   result: DictionaryResult | null;
@@ -22,6 +23,7 @@ interface DictionaryModalProps {
   remoteResult?: DictionaryResult | null;
   isRemoteLoading?: boolean;
   isAiLoading?: boolean;
+  streamText?: string;
   currentWord?: string;
   onClose: () => void;
   onAddToNotebook: (word: DictionaryResult) => void;
@@ -35,6 +37,7 @@ export function DictionaryModal({
   remoteResult = null,
   isRemoteLoading = false,
   isAiLoading = false,
+  streamText = "",
   currentWord,
   onClose,
   onAddToNotebook,
@@ -45,6 +48,7 @@ export function DictionaryModal({
   const [isSaved, setIsSaved] = useState(false);
   const dragControls = useDragControls();
   const baseResult = result || localResult || remoteResult;
+  const streamResult = getDictionaryPreview(streamText, currentWord || baseResult?.word);
 
   useEffect(() => {
     if (baseResult) {
@@ -113,10 +117,17 @@ export function DictionaryModal({
   };
 
   const renderContent = () => {
-    const headerResult = localResult || result;
-    const detailResult = remoteResult;
+    const headerResult = { ...(localResult || result || {}), ...(streamResult || {}) } as DictionaryResult;
+    const detailResult = (remoteResult || streamResult) as DictionaryResult | null;
     const displayWord = headerResult?.word || currentWord;
-    if (!headerResult && !displayWord) return null;
+    const hasHeaderContent = Boolean(
+      displayWord ||
+      headerResult?.phonetic ||
+      headerResult?.cnDefinition ||
+      headerResult?.definition ||
+      headerResult?.tags?.length
+    );
+    if (!hasHeaderContent) return null;
 
     const hasMeanings = detailResult?.meanings && detailResult.meanings.length > 0;
 
@@ -169,10 +180,16 @@ export function DictionaryModal({
               中文释义
             </h3>
             {isRemoteLoading || isAiLoading ? (
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm">查询中...</span>
-              </div>
+              headerResult?.cnDefinition ? (
+                <p className="text-xl text-slate-800 dark:text-slate-200 font-semibold">
+                  {headerResult.cnDefinition}
+                </p>
+              ) : (
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                  <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">查询中...</span>
+                </div>
+              )
             ) : headerResult?.cnDefinition ? (
               <p className="text-xl text-slate-800 dark:text-slate-200 font-semibold">
                 {headerResult.cnDefinition}
@@ -186,21 +203,14 @@ export function DictionaryModal({
         </div>
 
         <div className="space-y-6">
-          {isRemoteLoading || isAiLoading ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm">英文释义查询中...</span>
-              </div>
-              <div className="space-y-3 animate-pulse">
-                <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
-                <div className="h-4 w-full bg-slate-200 dark:bg-slate-700 rounded" />
-                <div className="h-4 w-5/6 bg-slate-200 dark:bg-slate-700 rounded" />
-                <div className="h-24 w-full bg-slate-200 dark:bg-slate-700 rounded" />
-              </div>
-            </div>
-          ) : detailResult ? (
+          {detailResult ? (
             <div className="space-y-6">
+              {(isRemoteLoading || isAiLoading) && (
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                  <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">内容生成中...</span>
+                </div>
+              )}
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
                 英文释义
               </h3>
@@ -230,6 +240,11 @@ export function DictionaryModal({
                   <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
                     {detailResult.definition}
                   </p>
+                  {detailResult.usage && (
+                    <p className="mt-3 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                      {detailResult.usage}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -272,6 +287,19 @@ export function DictionaryModal({
                   </div>
                 </div>
               )}
+            </div>
+          ) : isRemoteLoading || isAiLoading ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm">英文释义查询中...</span>
+              </div>
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
+                <div className="h-4 w-full bg-slate-200 dark:bg-slate-700 rounded" />
+                <div className="h-4 w-5/6 bg-slate-200 dark:bg-slate-700 rounded" />
+                <div className="h-24 w-full bg-slate-200 dark:bg-slate-700 rounded" />
+              </div>
             </div>
           ) : (
             <div className="text-slate-500 dark:text-slate-400 text-sm">

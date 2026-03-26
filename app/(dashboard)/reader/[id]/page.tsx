@@ -21,7 +21,7 @@ const EpubReader = dynamic(() => import("@/components/EpubReader").then((mod) =>
   loading: () => (
     <div className="flex flex-col items-center justify-center py-20">
       <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="text-slate-500 dark:text-slate-400">Loading reader...</p>
+      <p className="text-slate-500 dark:text-slate-400">正在加载阅读器...</p>
     </div>
   ),
 });

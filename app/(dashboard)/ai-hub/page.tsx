@@ -12,6 +12,8 @@ import { Article, AIVocabulary, AISentence } from "@/types";
 import { CuratedItem, AIProcessResult } from "@/lib/ai-processor";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { readStreamedJson } from "@/lib/stream-client";
+import { getArticlePreview } from "@/lib/stream-preview";
 
 const difficultyColors: Record<string, string> = {
   'CET-4': "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800",
@@ -51,6 +53,7 @@ export default function AIHubPage() {
   const [inputContent, setInputContent] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AIProcessResult | null>(null);
+  const [analysisPreview, setAnalysisPreview] = useState("");
 
   const [recommendations, setRecommendations] = useState<CuratedItem[]>([]);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
@@ -76,6 +79,7 @@ export default function AIHubPage() {
   const remainingImport = Math.max(0, 5 - dailyUsage.import);
   const remainingChat = Math.max(0, 50 - dailyUsage.chat);
   const remainingFeeds = Math.max(0, 5 - (dailyUsage.feedRefresh || 0));
+  const liveArticlePreview = getArticlePreview(analysisPreview);
 
   const handleRefresh = useCallback(async () => {
     if (!(await checkFeedRefreshQuota())) return;
@@ -174,6 +178,7 @@ export default function AIHubPage() {
       if (!(await checkImportQuota())) return;
       setIsAnalyzing(true);
       setResult(null);
+      setAnalysisPreview("");
       
       // Use Streaming API to avoid timeout
       const response = await fetch("/api/ai-analyze", {
@@ -191,47 +196,12 @@ export default function AIHubPage() {
           throw new Error(errData.error || "Analysis failed");
       }
 
-      const contentType = response.headers.get("content-type");
-      let aiResult;
-
-      if (contentType && contentType.includes("application/json")) {
-          // Handle Cached Result or simple JSON response
-          aiResult = await response.json();
-          toast.success("已加载缓存结果 (无消耗)");
-      } else {
-          // Handle Stream (SSE)
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-          let done = false;
-          let accumulatedText = "";
-
-          while (!done) {
-            const { value, done: doneReading } = await reader?.read()!;
-            done = doneReading;
-            const chunkValue = decoder.decode(value, { stream: true });
-            
-            const lines = chunkValue.split('\n');
-            for (const line of lines) {
-                if (line.trim().startsWith('data: ')) {
-                    const dataStr = line.trim().slice(6);
-                    if (dataStr === '[DONE]') continue;
-                    try {
-                        const json = JSON.parse(dataStr);
-                        const content = json.choices[0]?.delta?.content || "";
-                        accumulatedText += content;
-                    } catch (e) {
-                        // ignore incomplete chunks
-                    }
-                }
-            }
-          }
-          try {
-            aiResult = JSON.parse(accumulatedText);
-          } catch (e) {
-            console.error("JSON Parse Error:", e, accumulatedText);
-            throw new Error("AI output incomplete");
-          }
-      }
+      const aiResult = await readStreamedJson<AIProcessResult>({
+        response,
+        onDelta: (chunk) => {
+          setAnalysisPreview((prev) => prev + chunk);
+        },
+      });
       
       // 2. Save to Cache
       localStorage.setItem(cacheKey, JSON.stringify(aiResult));
@@ -297,7 +267,7 @@ export default function AIHubPage() {
       
       // Optimistic update
       const newMessages = [...chatMessages, { role: "user", content: userContent }];
-      setChatMessages(newMessages);
+      setChatMessages([...newMessages, { role: "assistant", content: "" }]);
       setIsChatLoading(true);
 
       // Save user message to Supabase
@@ -310,27 +280,55 @@ export default function AIHubPage() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages, userId: user.id }),
       });
 
-      if (!response.ok) throw new Error("Chat failed");
-      
-      const data = await response.json();
-      // API returns { role: "assistant", content: "..." }
-      const assistantMessage = { 
-        role: "assistant", 
-        content: data.content || data.reply || "Sorry, I couldn't understand that." 
+      const data = await readStreamedJson<{ role: string; content: string }>({
+        response,
+        onDelta: (chunk) => {
+          setChatMessages((prev) => {
+            const next = [...prev];
+            const lastIndex = next.length - 1;
+            if (lastIndex >= 0 && next[lastIndex].role === "assistant") {
+              next[lastIndex] = {
+                ...next[lastIndex],
+                content: `${next[lastIndex].content}${chunk}`,
+              };
+            }
+            return next;
+          });
+        },
+      });
+
+      const assistantMessage = {
+        role: "assistant",
+        content: data.content || "Sorry, I couldn't understand that.",
       };
+
+      setChatMessages((prev) => {
+        const next = [...prev];
+        const lastIndex = next.length - 1;
+        if (lastIndex >= 0 && next[lastIndex].role === "assistant") {
+          next[lastIndex] = assistantMessage;
+        }
+        return next;
+      });
       
       // Save assistant message to Supabase
       await supabase.from("chat_messages").insert({
         user_id: user.id,
         role: "assistant",
-        content: data.reply
+        content: assistantMessage.content
       });
-
-      setChatMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
+      setChatMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        if (last.role === "assistant" && !last.content.trim()) {
+          return prev.slice(0, -1);
+        }
+        return prev;
+      });
       toast.error("发送失败，请重试");
     } finally {
       setIsChatLoading(false);
@@ -505,6 +503,40 @@ export default function AIHubPage() {
                                 <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium">
                                     <Save size={18} /> 存入我的文库
                                 </button>
+                            </div>
+                        )}
+                        {isAnalyzing && analysisPreview && (
+                            <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl p-6 border shadow-sm">
+                                <div className="flex items-center gap-2 mb-4 text-indigo-600 dark:text-indigo-400">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span className="text-sm font-medium">AI 正在实时生成中...</span>
+                                </div>
+                                <div className="space-y-4">
+                                  {liveArticlePreview?.title && (
+                                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                                      {liveArticlePreview.title}
+                                    </h2>
+                                  )}
+                                  {liveArticlePreview?.title_zh && (
+                                    <p className="text-slate-500 dark:text-slate-400">
+                                      {liveArticlePreview.title_zh}
+                                    </p>
+                                  )}
+                                  {liveArticlePreview?.tags && liveArticlePreview.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                      {liveArticlePreview.tags.map((tag) => (
+                                        <span key={tag} className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                                          {tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {liveArticlePreview?.content && (
+                                    <p className="text-sm leading-7 text-slate-600 dark:text-slate-300 line-clamp-6">
+                                      {liveArticlePreview.content}
+                                    </p>
+                                  )}
+                                </div>
                             </div>
                         )}
                     </div>

@@ -4,19 +4,18 @@
  * 定义：一个无 UI 的逻辑组件，通常挂载在根布局中。
  * 逻辑：
  * 1. 使用 Supabase `onAuthStateChange` 监听登录、登出、Token 刷新等事件。
- * 2. 当会话过期或用户登出时，执行清理操作（如清除本地状态、跳转登录页）。
- * 3. 同步服务端和客户端的会话状态。
+ * 2. 当会话过期或用户登出时，执行清理操作（如清除本地状态、刷新页面）。
+ * 3. 同步服务端和客户端的会话状态，但避免在 Token 自动刷新时打断当前页面交互。
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 
 export function SessionListener() {
   const router = useRouter();
-  const accessTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     // 1. App 启动时，主动去 Supabase 拿最新的 Session
@@ -37,7 +36,6 @@ export function SessionListener() {
       if (session?.user) {
         // 同步到 Zustand Store
         useAppStore.getState().setUser(session.user);
-        accessTokenRef.current = session.access_token;
       }
     };
     checkSession();
@@ -54,13 +52,6 @@ export function SessionListener() {
       } else if (event === 'SIGNED_OUT') {
         useAppStore.getState().clearUser();
         router.refresh(); // 退出登录时强制刷新
-      }
-
-      // 检查 Token 是否变化，如果变化则刷新路由以同步 Cookie
-      const newAccessToken = session?.access_token;
-      if (newAccessToken && newAccessToken !== accessTokenRef.current) {
-        accessTokenRef.current = newAccessToken;
-        router.refresh();
       }
     });
 

@@ -8,6 +8,7 @@
  * 3. 返回生成结果供前端展示。
  */
 import { NextResponse } from "next/server";
+import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_BASE_URL = process.env.AI_BASE_URL || "https://api.openai.com/v1";
@@ -64,6 +65,7 @@ Your task is to generate a sophisticated, context-rich example sentence for a gi
         { role: "user", content: userPrompt },
       ],
       temperature: 0.7, // Slightly higher for creativity
+      stream: true,
       response_format: { type: "json_object" },
     };
 
@@ -82,10 +84,10 @@ Your task is to generate a sophisticated, context-rich example sentence for a gi
       throw new Error(`AI API Error: ${res.statusText}`);
     }
 
-    const data = await res.json();
-    const content = data.choices[0].message.content;
-    
-    return NextResponse.json(JSON.parse(content));
+    return streamOpenAIResponse({
+      upstream: res,
+      parse: (raw) => parseJsonCompletion<any>(raw),
+    });
 
   } catch (error) {
     console.error("Card Gen Error:", error);

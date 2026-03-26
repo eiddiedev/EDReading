@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -81,49 +82,99 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "AI configuration missing" }, { status: 500 });
     }
 
-    // 并行执行：DeepSeek + 音频获取
-    const deepSeekPromise = callDeepSeek(word, targetLevel, apiKey, baseUrl);
-    const audioPromise = callFreeDictionaryApiForAudio(word);
+    const prompt = `You are an IELTS/TOEFL vocabulary assistant. Return JSON only.
+{
+  "phonetic": "IPA",
+  "translation": "Simplified Chinese definition",
+  "collins": 0,
+  "level": 1,
+  "examples": [
+    { "sentence": "Example 1", "translation": "中文翻译1" },
+    { "sentence": "Example 2", "translation": "中文翻译2" }
+  ]
+}
+Rules:
+- "collins" is 0-5 if known, otherwise 0.
+- "level" is 1-4 (1 easiest, 4 hardest).
+- Examples must match target level: ${targetLevel}.`;
 
-    // 等待 AI 结果
-    const aiResult = await deepSeekPromise;
+    const aiResponse = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: word },
+        ],
+        temperature: 0.6,
+        stream: true,
+        response_format: { type: "json_object" },
+      }),
+    });
 
-    if (!aiResult) {
+    if (!aiResponse.ok) {
+      const errText = await aiResponse.text();
+      console.error("AI lookup error:", errText);
       return NextResponse.json({ error: "AI lookup failed" }, { status: 500 });
     }
 
-    let audioUrl: string | null = null;
-    try {
-      // 音频获取也加个1.5秒超时防卡死
-      const audioResult = await Promise.race([
-        audioPromise,
-        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
-      ]);
-      if (typeof audioResult === 'string') {
-        audioUrl = audioResult;
-      }
-    } catch (e) {
-      console.log("Audio fetch timeout/failed, ignoring...");
-    }
+    const audioPromise = callFreeDictionaryApiForAudio(word);
 
-    const finalResult = {
-      ...aiResult,
-      audio: audioUrl,
-    };
-    
-    // 异步写入数据库，不阻塞用户
-    writeToSupabase(word, finalResult);
+    return streamOpenAIResponse({
+      upstream: aiResponse,
+      parse: (raw) => {
+        const parsed = parseJsonCompletion<any>(raw);
+        const aiPhonetic = typeof parsed.phonetic === "string" ? parsed.phonetic : "";
+        const aiTranslation = typeof parsed.translation === "string" ? parsed.translation : "暂无释义";
+        const aiCollins =
+          typeof parsed.collins === "number"
+            ? parsed.collins
+            : typeof parsed.level === "number"
+              ? parsed.level === 1 ? 4 : parsed.level === 2 ? 3 : parsed.level === 3 ? 2 : 0
+              : 0;
 
-    return NextResponse.json({
-      word: word,
-      phonetic: finalResult.phonetic,
-      translation: finalResult.translation,
-      tag: finalResult.tag,
-      collins: finalResult.collins,
-      examples: finalResult.examples,
-      audio: finalResult.audio,
-      is_ai: true,
-      isAiGenerated: true
+        return {
+          word,
+          phonetic: aiPhonetic,
+          translation: aiTranslation,
+          cnDefinition: aiTranslation,
+          definition: aiTranslation,
+          tag: `${targetLevel} ai`,
+          tags: [`${targetLevel}`, "ai"],
+          collins: aiCollins,
+          examples: Array.isArray(parsed.examples) ? parsed.examples : [],
+          example: Array.isArray(parsed.examples) ? parsed.examples[0]?.sentence || "" : "",
+          exampleTranslation: Array.isArray(parsed.examples) ? parsed.examples[0]?.translation || "" : "",
+          is_ai: true,
+          isAiGenerated: true,
+        };
+      },
+      onDone: async (aiResult) => {
+        let audioUrl: string | null = null;
+        try {
+          const audioResult = await Promise.race([
+            audioPromise,
+            new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500)),
+          ]);
+          if (typeof audioResult === "string") {
+            audioUrl = audioResult;
+          }
+        } catch {
+          console.log("Audio fetch timeout/failed, ignoring...");
+        }
+
+        const finalResult = {
+          ...aiResult,
+          audio: audioUrl,
+        };
+
+        void writeToSupabase(word, finalResult);
+        return finalResult;
+      },
     });
 
   } catch (error) {
@@ -147,80 +198,6 @@ async function callFreeDictionaryApiForAudio(word: string): Promise<string | nul
     return null;
   } catch (error) {
     console.error("Free Dictionary API audio fetch error:", error);
-    return null;
-  }
-}
-
-async function callDeepSeek(word: string, targetLevel: string, apiKey: string, baseUrl: string) {
-  const prompt = `You are an IELTS/TOEFL vocabulary assistant. Return JSON only.
-{
-  "phonetic": "IPA",
-  "translation": "Simplified Chinese definition",
-  "collins": 0,
-  "level": 1,
-  "examples": [
-    { "sentence": "Example 1", "translation": "中文翻译1" },
-    { "sentence": "Example 2", "translation": "中文翻译2" }
-  ]
-}
-Rules:
-- "collins" is 0-5 if known, otherwise 0.
-- "level" is 1-4 (1 easiest, 4 hardest).
-- Examples must match target level: ${targetLevel}.`;
-
-  try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: prompt },
-          { role: "user", content: word },
-        ],
-        temperature: 0.6,
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("AI lookup error:", errText);
-      return null;
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "{}";
-    let parsed: any = {};
-    try {
-      parsed = JSON.parse(content);
-    } catch (error) {
-      console.error("AI lookup parse error:", error);
-      return null;
-    }
-
-    const aiPhonetic = typeof parsed.phonetic === "string" ? parsed.phonetic : "";
-    const aiTranslation = typeof parsed.translation === "string" ? parsed.translation : "暂无释义";
-    const aiCollins =
-      typeof parsed.collins === "number"
-        ? parsed.collins
-        : typeof parsed.level === "number"
-          ? parsed.level === 1 ? 4 : parsed.level === 2 ? 3 : parsed.level === 3 ? 2 : 0
-          : 0;
-    const aiTag = `${targetLevel} ai`;
-
-    return {
-      phonetic: aiPhonetic,
-      translation: aiTranslation,
-      tag: aiTag,
-      collins: aiCollins,
-      examples: Array.isArray(parsed.examples) ? parsed.examples : [],
-    };
-  } catch (error) {
-    console.error("callDeepSeek failed:", error);
     return null;
   }
 }

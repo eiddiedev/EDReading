@@ -14,8 +14,9 @@ import { X, Sparkles, Loader2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { Article } from "@/types";
-import { analyzeArticleWithAI } from "@/app/actions";
 import { toast } from "sonner";
+import { readStreamedJson } from "@/lib/stream-client";
+import { getArticlePreview } from "@/lib/stream-preview";
 
 interface PasteToReadModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
   const [content, setContent] = useState("");
   const [difficulty, setDifficulty] = useState<string>("IELTS");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [streamPreview, setStreamPreview] = useState("");
   
   const difficultyOptions = [
     { value: "CET-4", label: "大学四级 (CET-4)" },
@@ -45,6 +47,7 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
   }));
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const remainingImport = Math.max(0, 5 - dailyUsage.import);
+  const liveArticlePreview = getArticlePreview(streamPreview);
 
   useEffect(() => {
     ensureDailyUsage();
@@ -72,6 +75,7 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
     }
 
     setIsAnalyzing(true);
+    setStreamPreview("");
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -81,11 +85,27 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
         return;
       }
 
-      const aiResult = await analyzeArticleWithAI(content.trim(), user.id, difficulty, undefined, title.trim());
+      const response = await fetch("/api/import-article", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: content.trim(),
+          userId: user.id,
+          level: difficulty,
+          userTitle: title.trim(),
+        }),
+      });
+
+      const aiResult = await readStreamedJson<any>({
+        response,
+        onDelta: (chunk) => {
+          setStreamPreview((prev) => prev + chunk);
+        },
+      });
 
       const wordCount = content.split(/\s+/).length;
       const newArticle: Article = {
-        id: Date.now().toString(),
+        id: aiResult.id || Date.now().toString(),
         title: title.trim() || aiResult.title,
         title_zh: aiResult.title_zh,
         content: aiResult.content || content.trim(),
@@ -219,6 +239,39 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
               )}
             </button>
           </div>
+          {isAnalyzing && streamPreview && (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
+              <div className="text-xs font-medium text-indigo-600 dark:text-indigo-400 mb-2">
+                AI 正在实时解析文章...
+              </div>
+              <div className="space-y-3">
+                {liveArticlePreview?.title && (
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {liveArticlePreview.title}
+                  </h4>
+                )}
+                {liveArticlePreview?.title_zh && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {liveArticlePreview.title_zh}
+                  </p>
+                )}
+                {liveArticlePreview?.tags && liveArticlePreview.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {liveArticlePreview.tags.map((tag) => (
+                      <span key={tag} className="px-2 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {liveArticlePreview?.content && (
+                  <p className="text-sm leading-7 text-slate-600 dark:text-slate-300 line-clamp-5">
+                    {liveArticlePreview.content}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           <div className="text-xs text-slate-400">
             {isAdmin ? "管理员无限配额模式 🚀" : `今日剩余导入额度：${remainingImport} 篇`}
           </div>

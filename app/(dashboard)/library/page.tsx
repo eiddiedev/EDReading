@@ -16,6 +16,8 @@ import { toast } from "sonner";
 import { triggerHaptic } from "@/lib/utils";
 import { useArticles } from "@/hooks/useArticles";
 import { InView } from "react-intersection-observer";
+import { readStreamedJson } from "@/lib/stream-client";
+import { getArticlePreview } from "@/lib/stream-preview";
 
 export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState<"mine" | "discover">("mine");
@@ -27,6 +29,7 @@ export default function LibraryPage() {
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<string[]>([]);
+  const [generationStreamPreview, setGenerationStreamPreview] = useState("");
   const [pageSize, setPageSize] = useState(100);
   const libraryLoadedCount = useAppStore((state) => state.libraryLoadedCount);
   const setLibraryLoadedCount = useAppStore((state) => state.setLibraryLoadedCount);
@@ -147,6 +150,7 @@ export default function LibraryPage() {
   const totalCount = displayArticles.length;
   const progress = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0;
   const showGeneratingBanner = isGenerating || generatingIds.length > 0;
+  const liveGeneratedPreview = getArticlePreview(generationStreamPreview);
 
   useEffect(() => {
     setIsMounted(true);
@@ -230,6 +234,7 @@ export default function LibraryPage() {
   const handleGenerate = async (prompt: string, topicId: string, difficulty: string, count = 1) => {
     if (isGenerating) return;
     setIsGenerating(true);
+    setGenerationStreamPreview("");
     setIsTopicModalOpen(false);
 
     try {
@@ -254,6 +259,7 @@ export default function LibraryPage() {
       for (let i = 0; i < count; i += 1) {
         try {
           if (!(await checkGenerateQuota())) break;
+          setGenerationStreamPreview("");
           const res = await fetch("/api/generate-ielts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -271,7 +277,12 @@ export default function LibraryPage() {
             continue;
           }
 
-          const data = await res.json();
+          const data = await readStreamedJson<any>({
+            response: res,
+            onDelta: (chunk) => {
+              setGenerationStreamPreview((prev) => prev + chunk);
+            },
+          });
           const articleId = String(data.id || `${Date.now()}-${i}`);
           const wordCount = data.wordCount ?? data.word_count ?? (data.content ? data.content.split(/\s+/).length : 0);
           const createdAt = data.created_at || data.createdAt || new Date().toISOString();
@@ -297,23 +308,6 @@ export default function LibraryPage() {
           localStorage.setItem("generating_article_ids", JSON.stringify(nextIds));
 
           await addArticle(newArticle, true);
-          
-          // Task 1: Explicit insert handled here, but addArticle also syncs. 
-          // We keep this as is, but ensure we handle errors if any.
-          const { data: { user } } = await supabase.auth.getUser();
-          const { error } = await supabase.from("articles").insert([{
-            id: newArticle.id,
-            title: newArticle.title,
-            title_zh: newArticle.title_zh,
-            content: newArticle.content,
-            difficulty: newArticle.difficulty,
-            tags: newArticle.tags,
-            is_public: true,
-            user_id: user?.id,
-          }]);
-          if (error) {
-            console.error("同步云端失败:", error);
-          }
 
         } catch (error) {
           // Task 1: Show specific error if storage limit exceeded
@@ -327,6 +321,7 @@ export default function LibraryPage() {
     } finally {
       localStorage.setItem("generating_article_ids", "[]");
       setGeneratingIds([]);
+      setGenerationStreamPreview("");
       setIsGenerating(false);
       setActiveTab("mine");
       void fetchPublicLibrary();
@@ -420,6 +415,39 @@ export default function LibraryPage() {
               </div>
             )}
           </div>
+          {isGenerating && generationStreamPreview && (
+            <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm">
+              <div className="text-xs font-medium text-indigo-600 dark:text-indigo-400 mb-2">
+                AI 正在实时生成文章...
+              </div>
+              <div className="space-y-3">
+                {liveGeneratedPreview?.title && (
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {liveGeneratedPreview.title}
+                  </h3>
+                )}
+                {liveGeneratedPreview?.title_zh && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {liveGeneratedPreview.title_zh}
+                  </p>
+                )}
+                {liveGeneratedPreview?.tags && liveGeneratedPreview.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {liveGeneratedPreview.tags.map((tag) => (
+                      <span key={tag} className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {liveGeneratedPreview?.content && (
+                  <p className="text-sm leading-7 text-slate-600 dark:text-slate-300 line-clamp-5">
+                    {liveGeneratedPreview.content}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button

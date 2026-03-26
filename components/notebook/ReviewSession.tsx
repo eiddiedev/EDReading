@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { VocabularyWord } from "@/types";
 import { useAppStore } from "@/lib/store";
 import { triggerHaptic } from "@/lib/utils";
+import { lookupWord } from "@/lib/dictionary";
 import { X, Check, Volume2, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -14,6 +15,11 @@ import { toast } from "sonner";
 interface ReviewSessionProps {
   onClose: () => void;
   vocabulary: VocabularyWord[];
+}
+
+interface ReviewFallbackInfo {
+  englishDefinition?: string;
+  isLoading?: boolean;
 }
 
 export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
@@ -25,6 +31,7 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   const [status, setStatus] = useState<"idle" | "correct" | "wrong">("idle");
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
+  const [fallbackMap, setFallbackMap] = useState<Record<string, ReviewFallbackInfo>>({});
 
   // Initialize Quiz - Only once to prevent list shifting during review
   useEffect(() => {
@@ -35,6 +42,59 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   }, [vocabulary, quizWords.length]);
 
   const currentWord = quizWords[currentIndex];
+  const fallbackInfo = currentWord
+    ? fallbackMap[currentWord.word.trim().toLowerCase()]
+    : undefined;
+
+  useEffect(() => {
+    if (!currentWord) return;
+    if (currentWord.example?.trim()) return;
+
+    const wordKey = currentWord.word.trim().toLowerCase();
+    if (!wordKey) return;
+
+    const cached = fallbackMap[wordKey];
+    if (cached?.englishDefinition || cached?.isLoading) return;
+
+    let cancelled = false;
+    setFallbackMap((prev) => ({
+      ...prev,
+      [wordKey]: {
+        ...prev[wordKey],
+        isLoading: true,
+      },
+    }));
+
+    lookupWord(currentWord.word)
+      .then((result) => {
+        if (cancelled) return;
+
+        const englishDefinition =
+          result?.meanings?.find((meaning) => meaning.definitions?.[0]?.definition)?.definitions?.[0]?.definition ||
+          (result?.definition && /[a-zA-Z]/.test(result.definition) ? result.definition : undefined);
+
+        setFallbackMap((prev) => ({
+          ...prev,
+          [wordKey]: {
+            englishDefinition,
+            isLoading: false,
+          },
+        }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFallbackMap((prev) => ({
+          ...prev,
+          [wordKey]: {
+            isLoading: false,
+          },
+        }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWord, fallbackMap]);
 
   // Safety check to prevent crash if index goes out of bounds
   if (!currentWord && !isFinished && quizWords.length > 0) {
@@ -101,8 +161,7 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   };
 
   // Helper to blank out the word in the example sentence
-  const getMaskedExample = (word: string, sentence?: string) => {
-    if (!sentence) return "暂无例句";
+  const getMaskedExample = (word: string, sentence: string) => {
     // Regex to match the word case-insensitively
     const regex = new RegExp(word, "gi");
     return sentence.replace(regex, "______");
@@ -232,13 +291,26 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
 
               {/* Example Sentence */}
               <div className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-2xl mb-8 relative">
-                <p className="text-lg leading-relaxed text-indigo-900 dark:text-indigo-200 font-medium text-center">
-                  &quot;{getMaskedExample(currentWord.word, currentWord.example)}&quot;
-                </p>
-                {currentWord.exampleTranslation && (
-                  <p className="text-sm text-indigo-600 dark:text-indigo-400 mt-3 text-center border-t border-indigo-100 dark:border-indigo-800/50 pt-3">
-                    {currentWord.exampleTranslation}
-                  </p>
+                {currentWord.example?.trim() ? (
+                  <>
+                    <p className="text-lg leading-relaxed text-indigo-900 dark:text-indigo-200 font-medium text-center">
+                      &quot;{getMaskedExample(currentWord.word, currentWord.example)}&quot;
+                    </p>
+                    {currentWord.exampleTranslation && (
+                      <p className="text-sm text-indigo-600 dark:text-indigo-400 mt-3 text-center border-t border-indigo-100 dark:border-indigo-800/50 pt-3">
+                        {currentWord.exampleTranslation}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs uppercase tracking-[0.2em] text-indigo-500 dark:text-indigo-300 text-center mb-3">
+                      英文释义
+                    </p>
+                    <p className="text-lg leading-relaxed text-indigo-900 dark:text-indigo-200 font-medium text-center">
+                      {fallbackInfo?.englishDefinition || (fallbackInfo?.isLoading ? "正在补充英文释义..." : "请根据中文释义回忆单词拼写")}
+                    </p>
+                  </>
                 )}
               </div>
 

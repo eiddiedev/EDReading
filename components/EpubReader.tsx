@@ -18,6 +18,8 @@ import { DictionaryResult } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { triggerHaptic } from "@/lib/utils";
+import { readStreamedJson } from "@/lib/stream-client";
+import { getSentenceAnalysisPreview } from "@/lib/stream-preview";
 
 interface EpubReaderProps {
   url: string | ArrayBuffer;
@@ -25,6 +27,61 @@ interface EpubReaderProps {
   initialLocation?: string | number;
   onLocationChange?: (loc: string | number) => void;
   onProgressChange?: (loc: string | number, progress: number) => void;
+}
+
+interface PageDisplayState {
+  page: number;
+  total: number;
+}
+
+function getCurrentRenditionLocation(rendition: any) {
+  if (!rendition) return null;
+
+  try {
+    const currentLocation = rendition.currentLocation?.();
+    if (currentLocation && typeof currentLocation.then === "function") {
+      return rendition.location ?? null;
+    }
+    return currentLocation ?? rendition.location ?? null;
+  } catch {
+    return rendition.location ?? null;
+  }
+}
+
+function getDisplayedPageState(rendition: any, currentLocation?: any): PageDisplayState | null {
+  const activeLocation = currentLocation ?? getCurrentRenditionLocation(rendition);
+  const start = activeLocation?.start;
+  const cfi = start?.cfi;
+  const pageList = rendition?.book?.pageList;
+
+  if (cfi && pageList?.pages?.length) {
+    const page = pageList.pageFromCfi?.(cfi);
+    const total = typeof pageList.lastPage === "number" ? pageList.lastPage : null;
+    if (typeof page === "number" && page > 0 && typeof total === "number" && total > 0) {
+      return { page, total };
+    }
+  }
+
+  const locations = rendition?.book?.locations;
+  const rawTotal = typeof locations?.total === "number" ? locations.total : -1;
+  const virtualTotal = rawTotal >= 0 ? rawTotal + 1 : 0;
+
+  let rawLocation = typeof start?.location === "number" ? start.location : null;
+  if ((rawLocation === null || rawLocation < 0) && cfi && locations?.locationFromCfi) {
+    const nextLocation = locations.locationFromCfi(cfi);
+    if (typeof nextLocation === "number" && nextLocation >= 0) {
+      rawLocation = nextLocation;
+    }
+  }
+
+  if (rawLocation !== null && rawLocation >= 0 && virtualTotal > 0) {
+    return {
+      page: Math.min(virtualTotal, rawLocation + 1),
+      total: virtualTotal,
+    };
+  }
+
+  return null;
 }
 
 export function EpubReader({ url, title, initialLocation, onLocationChange, onProgressChange }: EpubReaderProps) {
@@ -46,6 +103,8 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
   const [isSentenceAnalyzing, setIsSentenceAnalyzing] = useState(false);
   const [isSentenceSheetOpen, setIsSentenceSheetOpen] = useState(false);
+  const [dictionaryStreamText, setDictionaryStreamText] = useState("");
+  const [sentenceStreamText, setSentenceStreamText] = useState("");
   const lookupTokenRef = useRef(0);
 
   // 移动端防误触：记录触摸起始位置
@@ -85,31 +144,111 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
   }, [ensureDailyUsage]);
 
   const remainingSentence = Math.max(0, 15 - dailyUsage.sentenceAnalysisCount);
+  const sentencePreview = getSentenceAnalysisPreview(sentenceStreamText);
+
+  function jumpToPage() {
+    const raw = parseInt(jumpInput, 10);
+    if (!raw || !rendition) return;
+
+    const pageList = rendition?.book?.pageList;
+    if (pageList?.pages?.length) {
+      const directCfi = pageList.cfiFromPage?.(raw);
+      if (directCfi && directCfi !== -1) {
+        rendition.display(directCfi);
+        return;
+      }
+
+      const pagePercent = pageList.percentageFromPage?.(raw);
+      if (typeof pagePercent === "number" && Number.isFinite(pagePercent)) {
+        const p = Math.min(1, Math.max(0, pagePercent));
+        const cfi = rendition?.book?.locations?.cfiFromPercentage?.(p);
+        if (cfi) {
+          rendition.display(cfi);
+          return;
+        }
+        rendition.display(p);
+        return;
+      }
+    }
+
+    const locations = rendition?.book?.locations;
+    const rawTotal = typeof locations?.total === "number" ? locations.total : -1;
+    const virtualTotal = rawTotal >= 0 ? rawTotal + 1 : 0;
+
+    let percent: number | null = null;
+    if (virtualTotal > 1) {
+      percent = (raw - 1) / (virtualTotal - 1);
+    } else if (raw <= 100) {
+      percent = raw / 100;
+    }
+    if (percent === null) return;
+
+    const p = Math.min(1, Math.max(0, percent));
+    const cfi = locations?.cfiFromPercentage ? locations.cfiFromPercentage(p) : null;
+    if (cfi) {
+      rendition.display(cfi);
+      return;
+    }
+    rendition.display(p);
+  }
 
   useEffect(() => {
+    let cancelled = false;
     const locations = rendition?.book?.locations;
-    if (locations && locations.total === 0) {
-      locations.generate(1000);
+    if (!locations) return;
+
+    const updateDisplayedPage = () => {
+      const nextState = getDisplayedPageState(rendition);
+      if (nextState) {
+        setDisplayedPage(nextState.page);
+        setDisplayedTotal(nextState.total);
+        return;
+      }
+      setDisplayedPage(null);
+      setDisplayedTotal(null);
+    };
+
+    if (locations.total > 0) {
+      updateDisplayedPage();
+      return;
     }
+
+    Promise.resolve(locations.generate(1000))
+      .then(() => {
+        if (!cancelled) {
+          updateDisplayedPage();
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn("Failed to generate EPUB locations", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [rendition]);
 
   const onLocationChanged = (loc: string | number) => {
     setLocation(loc);
     if (onLocationChange) onLocationChange(loc);
+
+    const currentLocation = getCurrentRenditionLocation(rendition);
+    const percentage = currentLocation?.start?.percentage;
+    const progress = typeof percentage === "number" ? Math.round(percentage * 100) : 0;
+    setProgressPercent(progress);
+
     if (onProgressChange) {
-      const percentage = rendition?.location?.start?.percentage;
-      const progress = typeof percentage === "number" ? Math.round(percentage * 100) : 0;
       onProgressChange(loc, progress);
-      setProgressPercent(progress);
     }
-    const displayed = rendition?.location?.start?.displayed;
-    if (displayed?.page && displayed?.total) {
-      setDisplayedPage(displayed.page);
-      setDisplayedTotal(displayed.total);
-    } else {
-      setDisplayedPage(null);
-      setDisplayedTotal(null);
+
+    const nextState = getDisplayedPageState(rendition, currentLocation);
+    if (nextState) {
+      setDisplayedPage(nextState.page);
+      setDisplayedTotal(nextState.total);
+      return;
     }
+    setDisplayedPage(null);
+    setDisplayedTotal(null);
   };
 
   // --- 核心修复：移动端高性能点击监听 ---
@@ -221,6 +360,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
     setIsAiLoading(false);
     setDictionaryResult(null);
     setSelectedText(null);
+    setDictionaryStreamText("");
     lookupTokenRef.current += 1;
   };
 
@@ -241,6 +381,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
     setIsSentenceAnalyzing(false);
     setAnalysisResult(null);
     setSelectedText(null);
+    setSentenceStreamText("");
   };
 
   const handleSentenceAnalyze = async () => {
@@ -249,6 +390,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
 
     setIsSentenceAnalyzing(true);
     setAnalysisResult(null);
+    setSentenceStreamText("");
     setIsSentenceSheetOpen(true);
     
     // 重置单词查询状态
@@ -265,8 +407,12 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
           type: "sentence",
         }),
       });
-      if (!response.ok) throw new Error("Analysis failed");
-      const data = await response.json();
+      const data = await readStreamedJson<any>({
+        response,
+        onDelta: (chunk) => {
+          setSentenceStreamText((prev) => prev + chunk);
+        },
+      });
       setAnalysisResult(data);
     } catch (error) {
       console.error(error);
@@ -285,6 +431,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
     setDictionaryResult(null);
     setIsRemoteLoading(false);
     setIsAiLoading(false);
+    setDictionaryStreamText("");
 
     // A. 优先查 Supabase Dictionary (性能优化：无需 AI)
     // 直接调用 API
@@ -325,10 +472,18 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selection: cleanWord, type: "word" })
       });
-      const data = await res.json();
+      const data = await readStreamedJson<any>({
+        response: res,
+        onDelta: (chunk) => {
+          setDictionaryStreamText((prev) => prev + chunk);
+        },
+      });
       if (lookupTokenRef.current !== token) return;
       if (!data.error) {
-        setDictionaryResult(data);
+        setDictionaryResult({
+          ...data,
+          cnDefinition: data.cnDefinition || data.definition || "",
+        });
       }
     } catch (e) {
       console.error(e);
@@ -370,49 +525,16 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
           value={jumpInput}
           onChange={(e) => setJumpInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            const raw = parseInt(jumpInput, 10);
-            if (!raw || !rendition) return;
-            let percent: number | null = null;
-            if (displayedTotal && displayedTotal > 0) {
-              percent = (raw - 1) / displayedTotal;
-            } else if (raw <= 100) {
-              percent = raw / 100;
+            if (e.key === "Enter") {
+              jumpToPage();
             }
-            if (percent === null) return;
-            const p = Math.min(1, Math.max(0, percent));
-            const locations = rendition?.book?.locations;
-            const cfi = locations?.cfiFromPercentage ? locations.cfiFromPercentage(p) : null;
-            if (cfi) {
-              rendition.display(cfi);
-              return;
-            }
-            rendition.display(p);
           }}
           className="w-16 bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
           placeholder={displayedTotal ? "页码" : "%"}
         />
         <button
           type="button"
-          onClick={() => {
-            const raw = parseInt(jumpInput, 10);
-            if (!raw || !rendition) return;
-            let percent: number | null = null;
-            if (displayedTotal && displayedTotal > 0) {
-              percent = (raw - 1) / displayedTotal;
-            } else if (raw <= 100) {
-              percent = raw / 100;
-            }
-            if (percent === null) return;
-            const p = Math.min(1, Math.max(0, percent));
-            const locations = rendition?.book?.locations;
-            const cfi = locations?.cfiFromPercentage ? locations.cfiFromPercentage(p) : null;
-            if (cfi) {
-              rendition.display(cfi);
-              return;
-            }
-            rendition.display(p);
-          }}
+          onClick={jumpToPage}
           className="text-xs font-medium text-indigo-600 dark:text-indigo-400"
         >
           跳转
@@ -425,6 +547,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
         isLoading={isSheetOpen ? (isRemoteLoading || isAiLoading) : false}
         isRemoteLoading={isSheetOpen ? isRemoteLoading : false}
         isAiLoading={isSheetOpen ? isAiLoading : false}
+        streamText={isSheetOpen ? dictionaryStreamText : ""}
         onClose={closeSheet}
         onAddToNotebook={(word) => {
           addVocabulary({
@@ -525,19 +648,105 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
                 <div className="space-y-4 py-4">
                   <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-medium animate-pulse">
                     <Loader2 className="animate-spin" />
-                    Analyzing...
+                    分析中...
                   </div>
-                  <div className="space-y-2">
-                    <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-3/4 animate-pulse" />
-                    <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/2 animate-pulse" />
-                  </div>
+                  {sentencePreview ? (
+                    <div className="space-y-5">
+                      {sentencePreview.translation && (
+                        <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900/30">
+                          <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">中文翻译</h4>
+                          <p className="text-lg text-slate-800 dark:text-slate-200">
+                            {sentencePreview.translation}
+                          </p>
+                        </div>
+                      )}
+
+                      {(sentencePreview.structure || sentencePreview.grammarExplanation) && (
+                        <div>
+                          <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
+                            <GraduationCap size={16} />
+                            语法解析
+                          </h4>
+                          {sentencePreview.structure && (
+                            <div className="flex flex-wrap gap-2 mb-4 text-sm">
+                              {sentencePreview.structure.subject && (
+                                <span className="px-2 py-1 rounded bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">
+                                  <b>S:</b> {sentencePreview.structure.subject}
+                                </span>
+                              )}
+                              {sentencePreview.structure.verb && (
+                                <span className="px-2 py-1 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
+                                  <b>V:</b> {sentencePreview.structure.verb}
+                                </span>
+                              )}
+                              {sentencePreview.structure.object && (
+                                <span className="px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                  <b>O:</b> {sentencePreview.structure.object}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {sentencePreview.grammarExplanation && (
+                            <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
+                              {sentencePreview.grammarExplanation}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {sentencePreview.vocabulary && sentencePreview.vocabulary.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重点词汇</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {sentencePreview.vocabulary.map((w: string) => (
+                              <span key={w} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm rounded-md border border-slate-200 dark:border-slate-700">
+                                {w}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {sentencePreview.importantPhrases && sentencePreview.importantPhrases.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重要短语与地道表达</h4>
+                          <div className="space-y-3">
+                            {sentencePreview.importantPhrases.map((item, index) => (
+                              <div key={`${item.phrase || "phrase"}-${index}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                                {item.phrase && (
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {item.phrase}
+                                  </p>
+                                )}
+                                {item.localExpression && (
+                                  <p className="mt-1 text-sm text-primary-600 dark:text-primary-400">
+                                    地道表达：{item.localExpression}
+                                  </p>
+                                )}
+                                {item.explanation && (
+                                  <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                                    {item.explanation}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-3/4 animate-pulse" />
+                      <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/2 animate-pulse" />
+                    </div>
+                  )}
                 </div>
               )}
 
               {analysisResult && (
                 <div className="space-y-5">
                   <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900/30">
-                    <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">Translation</h4>
+                    <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">中文翻译</h4>
                     <p className="text-lg text-slate-800 dark:text-slate-200">
                       {analysisResult.translation}
                     </p>
@@ -546,7 +755,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
                   <div>
                     <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
                       <GraduationCap size={16} />
-                      Grammar Analysis
+                      语法解析
                     </h4>
                     {analysisResult.structure && (
                       <div className="flex flex-wrap gap-2 mb-4 text-sm">
@@ -568,12 +777,39 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
 
                   {analysisResult.vocabulary && analysisResult.vocabulary.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Key Vocabulary</h4>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重点词汇</h4>
                       <div className="flex flex-wrap gap-2">
                         {analysisResult.vocabulary.map((w: string) => (
                           <span key={w} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm rounded-md border border-slate-200 dark:border-slate-700">
                             {w}
                           </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {analysisResult.importantPhrases && analysisResult.importantPhrases.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重要短语与地道表达</h4>
+                      <div className="space-y-3">
+                        {analysisResult.importantPhrases.map((item: any, index: number) => (
+                          <div key={`${item.phrase || "phrase"}-${index}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                            {item.phrase && (
+                              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                {item.phrase}
+                              </p>
+                            )}
+                            {item.localExpression && (
+                              <p className="mt-1 text-sm text-primary-600 dark:text-primary-400">
+                                地道表达：{item.localExpression}
+                              </p>
+                            )}
+                            {item.explanation && (
+                              <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                                {item.explanation}
+                              </p>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
