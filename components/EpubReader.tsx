@@ -446,6 +446,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
           setDictionaryResult({
             word: data.word,
             phonetic: data.phonetic,
+            audio: data.audio,
             definition: data.translation,
             cnDefinition: data.translation, // 添加中文释义
             tags: data.tag ? data.tag.split(' ') : [],
@@ -556,6 +557,7 @@ export function EpubReader({ url, title, initialLocation, onLocationChange, onPr
              definition: word.definition,
              exampleTranslation: word.exampleTranslation,
              phonetic: word.phonetic,
+             audio: word.audio,
              createdAt: new Date().toISOString(),
              reviewCount: 0,
              correctCount: 0

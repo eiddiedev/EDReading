@@ -3,11 +3,12 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
-import { VocabularyWord } from "@/types";
+import { useState, useEffect, useRef } from "react";
+import { DictionaryResult, VocabularyWord } from "@/types";
 import { useAppStore } from "@/lib/store";
 import { triggerHaptic } from "@/lib/utils";
-import { lookupWord } from "@/lib/dictionary";
+import { resolvePronunciationAudioUrl } from "@/lib/pronunciation";
+import { getCachedDictionaryResult, lookupWord } from "@/lib/dictionary";
 import { X, Check, Volume2, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -22,6 +23,17 @@ interface ReviewFallbackInfo {
   isLoading?: boolean;
 }
 
+function extractEnglishDefinition(result?: DictionaryResult | null) {
+  return (
+    result?.meanings?.find((meaning) => meaning.definitions?.[0]?.definition)?.definitions?.[0]?.definition ||
+    (result?.definition && /[a-zA-Z]/.test(result.definition) ? result.definition : undefined)
+  );
+}
+
+function getWordKey(word?: string) {
+  return word?.trim().toLowerCase() || "";
+}
+
 export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   const incrementReviewCount = useAppStore((state) => state.incrementReviewCount);
   const markAsMastered = useAppStore((state) => state.markAsMastered);
@@ -32,6 +44,12 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [fallbackMap, setFallbackMap] = useState<Record<string, ReviewFallbackInfo>>({});
+  const fallbackMapRef = useRef<Record<string, ReviewFallbackInfo>>({});
+  const inflightFallbacksRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    fallbackMapRef.current = fallbackMap;
+  }, [fallbackMap]);
 
   // Initialize Quiz - Only once to prevent list shifting during review
   useEffect(() => {
@@ -45,56 +63,128 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   const fallbackInfo = currentWord
     ? fallbackMap[currentWord.word.trim().toLowerCase()]
     : undefined;
+  const pronunciationUrl = currentWord
+    ? resolvePronunciationAudioUrl(currentWord.word, currentWord.audio)
+    : null;
+
+  const handlePlayPronunciation = () => {
+    if (!currentWord) return;
+    if (!pronunciationUrl) {
+      toast.info("这个单词暂时没有可用发音");
+      return;
+    }
+
+    const audio = new Audio(pronunciationUrl);
+    audio.play().catch((error) => {
+      console.error("Pronunciation playback failed:", error);
+      toast.error("发音播放失败，请稍后再试");
+    });
+  };
 
   useEffect(() => {
     if (!currentWord) return;
-    if (currentWord.example?.trim()) return;
+    const nextWord = quizWords[currentIndex + 1];
+    const pendingTimers: number[] = [];
+    const cancels: Array<() => void> = [];
 
-    const wordKey = currentWord.word.trim().toLowerCase();
-    if (!wordKey) return;
+    const ensureFallback = (word: VocabularyWord | undefined, showLoading: boolean) => {
+      if (!word || word.example?.trim()) return;
 
-    const cached = fallbackMap[wordKey];
-    if (cached?.englishDefinition || cached?.isLoading) return;
+      const wordKey = getWordKey(word.word);
+      if (!wordKey) return;
 
-    let cancelled = false;
-    setFallbackMap((prev) => ({
-      ...prev,
-      [wordKey]: {
-        ...prev[wordKey],
-        isLoading: true,
-      },
-    }));
+      const cachedFallback = fallbackMapRef.current[wordKey];
+      if (cachedFallback?.englishDefinition) return;
 
-    lookupWord(currentWord.word)
-      .then((result) => {
-        if (cancelled) return;
-
-        const englishDefinition =
-          result?.meanings?.find((meaning) => meaning.definitions?.[0]?.definition)?.definitions?.[0]?.definition ||
-          (result?.definition && /[a-zA-Z]/.test(result.definition) ? result.definition : undefined);
-
+      const cachedDictionary = getCachedDictionaryResult(word.word);
+      const cachedEnglishDefinition = extractEnglishDefinition(cachedDictionary);
+      if (cachedEnglishDefinition) {
         setFallbackMap((prev) => ({
           ...prev,
           [wordKey]: {
-            englishDefinition,
+            englishDefinition: cachedEnglishDefinition,
             isLoading: false,
           },
         }));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setFallbackMap((prev) => ({
-          ...prev,
-          [wordKey]: {
-            isLoading: false,
-          },
-        }));
+        return;
+      }
+
+      if (inflightFallbacksRef.current.has(wordKey)) {
+        if (showLoading && !cachedFallback?.isLoading) {
+          const timer = window.setTimeout(() => {
+            const latestFallback = fallbackMapRef.current[wordKey];
+            if (latestFallback?.englishDefinition) return;
+
+            setFallbackMap((prev) => ({
+              ...prev,
+              [wordKey]: {
+                ...prev[wordKey],
+                isLoading: true,
+              },
+            }));
+          }, 180);
+          pendingTimers.push(timer);
+        }
+        return;
+      }
+
+      let cancelled = false;
+      inflightFallbacksRef.current.add(wordKey);
+
+      if (showLoading) {
+        const timer = window.setTimeout(() => {
+          if (cancelled) return;
+          setFallbackMap((prev) => ({
+            ...prev,
+            [wordKey]: {
+              ...prev[wordKey],
+              isLoading: true,
+            },
+          }));
+        }, 180);
+        pendingTimers.push(timer);
+      }
+
+      lookupWord(word.word)
+        .then((result) => {
+          if (cancelled) return;
+
+          const englishDefinition = extractEnglishDefinition(result);
+          setFallbackMap((prev) => ({
+            ...prev,
+            [wordKey]: {
+              englishDefinition,
+              isLoading: false,
+            },
+          }));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setFallbackMap((prev) => ({
+            ...prev,
+            [wordKey]: {
+              ...prev[wordKey],
+              isLoading: false,
+            },
+          }));
+        })
+        .finally(() => {
+          inflightFallbacksRef.current.delete(wordKey);
+        });
+
+      cancels.push(() => {
+        cancelled = true;
       });
+    };
+
+    ensureFallback(currentWord, true);
+    ensureFallback(nextWord, false);
 
     return () => {
-      cancelled = true;
+      pendingTimers.forEach((timer) => window.clearTimeout(timer));
+      cancels.forEach((cancel) => cancel());
     };
-  }, [currentWord, fallbackMap]);
+  }, [currentWord, currentIndex, quizWords]);
 
   // Safety check to prevent crash if index goes out of bounds
   if (!currentWord && !isFinished && quizWords.length > 0) {
@@ -282,10 +372,16 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
                   {currentWord.definition}
                 </h3>
                 {currentWord.phonetic && (
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full text-sm text-slate-500 dark:text-slate-300">
+                  <button
+                    type="button"
+                    onClick={handlePlayPronunciation}
+                    disabled={!pronunciationUrl}
+                    className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full text-sm text-slate-500 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label={`播放 ${currentWord.word} 的发音`}
+                  >
                     <Volume2 className="w-3 h-3" />
                     {currentWord.phonetic}
-                  </div>
+                  </button>
                 )}
               </div>
 

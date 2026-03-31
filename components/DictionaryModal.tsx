@@ -59,7 +59,7 @@ export function DictionaryModal({
     }
   }, [baseResult, vocabulary]);
 
-  const audioUrl = remoteResult?.audio || result?.audio;
+  const audioUrl = remoteResult?.audio || result?.audio || localResult?.audio;
 
   useEffect(() => {
     if (audioUrl) {

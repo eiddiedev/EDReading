@@ -627,6 +627,7 @@ useEffect(() => {
       id: Date.now().toString(),
       word: word.word,
       phonetic: word.phonetic,
+      audio: word.audio,
       definition: word.definition,
       example: word.example,
       exampleTranslation: word.exampleTranslation,

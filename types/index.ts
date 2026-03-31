@@ -104,6 +104,7 @@ export interface VocabularyWord {
   id: string;
   word: string;
   phonetic?: string;
+  audio?: string;
   definition: string;
   example?: string;
   exampleTranslation?: string;

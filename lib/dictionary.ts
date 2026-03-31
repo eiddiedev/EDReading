@@ -10,12 +10,31 @@
  * 5. 整合结果并缓存。
  */
 import { DictionaryResult, DictionaryMeaning } from "@/types";
+import { resolvePronunciationAudioUrl } from "@/lib/pronunciation";
 // @ts-ignore
 import nlp from "compromise";
 
 const DICTIONARY_API_BASE = "https://api.dictionaryapi.dev/api/v2/entries/en";
 const MYMEMORY_API_BASE = "https://api.mymemory.translated.net/get";
-const YOUDAO_AUDIO_BASE = "https://dict.youdao.com/dictvoice";
+
+export function getCachedDictionaryResult(word: string): DictionaryResult | null {
+  const normalizedWord = word.trim().toLowerCase();
+  const cacheKey = `dict_cache_${normalizedWord}`;
+
+  if (!normalizedWord || typeof window === "undefined") return null;
+
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (!cached) return null;
+
+    const result = JSON.parse(cached);
+    return result?.word ? result : null;
+  } catch (e) {
+    console.error("Cache parse error", e);
+    localStorage.removeItem(cacheKey);
+    return null;
+  }
+}
 
 export async function lookupLocalDictionary(word: string): Promise<DictionaryResult | null> {
   const normalizedWord = word.trim().toLowerCase();
@@ -43,6 +62,7 @@ export async function lookupLocalDictionary(word: string): Promise<DictionaryRes
     const result = {
       word: normalizedWord,
       phonetic: data.phonetic || "",
+      audio: resolvePronunciationAudioUrl(normalizedWord, data.audio) || undefined,
       cnDefinition: data.translation || "",
       tags,
       definition: data.translation || "暂无释义",
@@ -76,6 +96,7 @@ export async function lookupAiDictionary(word: string, targetLevel: string): Pro
     return {
       word: normalizedWord,
       phonetic: data.phonetic || "",
+      audio: resolvePronunciationAudioUrl(normalizedWord, data.audio) || undefined,
       cnDefinition: data.translation || "",
       tags,
       definition: data.translation || "暂无释义",
@@ -122,7 +143,7 @@ export async function lookupExternalDictionary(word: string): Promise<Dictionary
     }
     examples = examples.slice(0, 3);
     const phonetic = entry.phonetic || entry.phonetics?.find((p: any) => p.text)?.text || "";
-    const audio = entry.phonetics?.find((p: any) => p.audio)?.audio || "";
+    const audio = resolvePronunciationAudioUrl(normalizedWord, entry.phonetics?.find((p: any) => p.audio)?.audio || "") || undefined;
     const definition = meanings[0]?.definitions?.[0]?.definition || "暂无释义";
     return {
       word: entry.word || normalizedWord,
@@ -141,23 +162,11 @@ export async function lookupExternalDictionary(word: string): Promise<Dictionary
 
 export async function lookupWord(word: string, context?: string): Promise<DictionaryResult | null> {
   const normalizedWord = word.trim().toLowerCase();
-  const cacheKey = `dict_cache_${normalizedWord}`;
 
   // 1. Check local storage cache
-  if (typeof window !== "undefined") {
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const result = JSON.parse(cached);
-        // Simple validation
-        if (result.word) {
-          return result;
-        }
-      }
-    } catch (e) {
-      console.error("Cache parse error", e);
-      localStorage.removeItem(cacheKey);
-    }
+  const cachedResult = getCachedDictionaryResult(normalizedWord);
+  if (cachedResult) {
+    return cachedResult;
   }
 
   try {
@@ -169,7 +178,7 @@ export async function lookupWord(word: string, context?: string): Promise<Dictio
 
     let meanings: DictionaryMeaning[] = [];
     let phonetic = "";
-    let audio = "";
+    let audio = resolvePronunciationAudioUrl(normalizedWord) || undefined;
     let examples: { sentence: string; translation?: string }[] = [];
     let cnDefinition = "";
     let returnedWord = word;
@@ -184,6 +193,7 @@ export async function lookupWord(word: string, context?: string): Promise<Dictio
           
           // Phonetic
           phonetic = entry.phonetic || entry.phonetics?.find((p: any) => p.text)?.text || "";
+          audio = resolvePronunciationAudioUrl(normalizedWord, entry.phonetics?.find((p: any) => p.audio)?.audio || "") || undefined;
           
           // Meanings
           if (entry.meanings && Array.isArray(entry.meanings)) {
@@ -230,9 +240,6 @@ export async function lookupWord(word: string, context?: string): Promise<Dictio
       }
     }
 
-    // Generate Youdao Audio Link
-    audio = `${YOUDAO_AUDIO_BASE}?audio=${normalizedWord}&type=2`;
-
     // If we found nothing relevant, return null
     if (meanings.length === 0 && !cnDefinition) {
       return null;
@@ -254,6 +261,7 @@ export async function lookupWord(word: string, context?: string): Promise<Dictio
     // 3. Cache result
     if (typeof window !== "undefined") {
       try {
+        const cacheKey = `dict_cache_${normalizedWord}`;
         localStorage.setItem(cacheKey, JSON.stringify(result));
       } catch (e) {
         console.error("Cache write error", e);

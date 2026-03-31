@@ -13,6 +13,7 @@ import { StateCreator } from "zustand";
 import { ReviewSlice, AppState } from "./types";
 import { supabase } from "@/lib/supabase";
 import { calculateNextReview } from "@/lib/utils/srs";
+import { buildPronunciationAudioUrl } from "@/lib/pronunciation";
 import { toast } from "sonner";
 
 import { VocabularyWord } from "@/types";
@@ -51,12 +52,15 @@ export const createReviewSlice: StateCreator<AppState, [], [], ReviewSlice> = (s
     }
     nextReview.setHours(4, 0, 0, 0);
     
+    const resolvedAudio = word.audio || buildPronunciationAudioUrl(word.word) || undefined;
+
     // Optimistic update
     set((state) => ({
       vocabulary: [
         ...state.vocabulary,
         {
           ...word,
+          audio: resolvedAudio,
           reviewCount: word.reviewCount || 0,
           correctCount: word.correctCount || 0,
           reviewStage: 0,
@@ -85,6 +89,7 @@ export const createReviewSlice: StateCreator<AppState, [], [], ReviewSlice> = (s
       user_id: session.user.id,
       word: word.word,
       phonetic: word.phonetic,
+      audio: resolvedAudio,
       definition: word.definition,
       translation: word.exampleTranslation,
       example: word.example,
@@ -249,6 +254,7 @@ export const createReviewSlice: StateCreator<AppState, [], [], ReviewSlice> = (s
         exampleTranslation: item.translation,
         example: item.example,
         phonetic: item.phonetic,
+        audio: item.audio,
         createdAt: item.created_at,
         reviewCount: item.review_count,
         correctCount: item.correct_count,

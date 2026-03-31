@@ -48,6 +48,7 @@ export default function NotebookPage() {
           id: v.id,
           word: v.word,
           phonetic: v.phonetic,
+          audio: v.audio,
           definition: v.definition,
           example: v.example,
           exampleTranslation: v.translation,

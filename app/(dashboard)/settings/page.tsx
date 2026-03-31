@@ -1,5 +1,5 @@
 /**
- * 用户设置页面，提供账户管理（登录/注册）、数据云端同步、暗色模式切换、字体调整、管理员入口和关于信息。
+ * 用户设置页面，提供账户管理（登录/注册）、数据云端同步、暗色模式切换、管理员入口和关于信息。
  */
 "use client";
 
@@ -23,8 +23,6 @@ export default function SettingsPage() {
   const router = useRouter();
   const isDarkMode = useAppStore((state) => state.isDarkMode);
   const toggleDarkMode = useAppStore((state) => state.toggleDarkMode);
-  const fontSize = useAppStore((state) => state.fontSize);
-  const setFontSize = useAppStore((state) => state.setFontSize);
   
   // Store Data for Sync
   const setVocabulary = useAppStore((state) => state.setVocabulary);
@@ -264,45 +262,6 @@ export default function SettingsPage() {
                     }`}
                   />
                 </button>
-              </div>
-            </div>
-
-            {/* Font Size Slider */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
-                  字体大小
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  调整阅读字体大小（12px - 24px）
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-slate-500 dark:text-slate-400 w-12">
-                  12px
-                </span>
-                <input
-                  type="range"
-                  min="12"
-                  max="24"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(Number(e.target.value))}
-                  className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary-600"
-                />
-                <span className="text-sm text-slate-500 dark:text-slate-400 w-12">
-                  24px
-                </span>
-                <span className="text-sm font-medium text-slate-900 dark:text-slate-100 w-12 text-right">
-                  {fontSize}px
-                </span>
-              </div>
-              <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                <p
-                  className="text-slate-700 dark:text-slate-300"
-                  style={{ fontSize: `${fontSize}px` }}
-                >
-                  预览：The quick brown fox jumps over the lazy dog.
-                </p>
               </div>
             </div>
 

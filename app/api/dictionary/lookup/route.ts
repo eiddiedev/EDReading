@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
+import { buildPronunciationAudioUrl, normalizePronunciationAudioUrl } from "@/lib/pronunciation";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
     console.log(`🚀 [Lookup] Local Hit: "${word}" -> "${localData.word}" in ${Date.now() - start}ms`);
     return NextResponse.json({
       ...localData,
+      audio: normalizePronunciationAudioUrl(localData.audio) || buildPronunciationAudioUrl(localData.word || word),
       source: "local",
       isAiGenerated: false
     });
@@ -169,7 +171,7 @@ Rules:
 
         const finalResult = {
           ...aiResult,
-          audio: audioUrl,
+          audio: normalizePronunciationAudioUrl(audioUrl) || buildPronunciationAudioUrl(word),
         };
 
         void writeToSupabase(word, finalResult);
@@ -193,7 +195,7 @@ async function callFreeDictionaryApiForAudio(word: string): Promise<string | nul
     if (Array.isArray(data) && data.length > 0) {
       const entry = data[0];
       const audio = entry.phonetics?.find((p: any) => p.audio)?.audio || "";
-      return audio;
+      return normalizePronunciationAudioUrl(audio);
     }
     return null;
   } catch (error) {

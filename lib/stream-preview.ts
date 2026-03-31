@@ -192,6 +192,7 @@ export function getDictionaryPreview(input: string, fallbackWord?: string): Part
         ? parsed.word
         : fallbackWord,
     phonetic: typeof parsed.phonetic === "string" ? parsed.phonetic : undefined,
+    audio: typeof parsed.audio === "string" ? parsed.audio : undefined,
     definition:
       typeof parsed.definition === "string"
         ? parsed.definition
