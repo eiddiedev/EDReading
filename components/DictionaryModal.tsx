@@ -9,7 +9,7 @@
  * 2. 展示音标、释义、例句等信息。
  * 3. 提供添加到生词本的交互，支持状态反馈（加载中、已添加）。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, X, Check, Sparkles, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
@@ -21,6 +21,7 @@ interface DictionaryModalProps {
   result: DictionaryResult | null;
   localResult?: DictionaryResult | null;
   remoteResult?: DictionaryResult | null;
+  isLocalLoading?: boolean;
   isRemoteLoading?: boolean;
   isAiLoading?: boolean;
   streamText?: string;
@@ -35,6 +36,7 @@ export function DictionaryModal({
   result,
   localResult = null,
   remoteResult = null,
+  isLocalLoading = false,
   isRemoteLoading = false,
   isAiLoading = false,
   streamText = "",
@@ -46,6 +48,7 @@ export function DictionaryModal({
 }: DictionaryModalProps) {
   const vocabulary = useAppStore((state) => state.vocabulary);
   const [isSaved, setIsSaved] = useState(false);
+  const lastAutoPlayedWordRef = useRef<string | null>(null);
   const dragControls = useDragControls();
   const baseResult = result || localResult || remoteResult;
   const streamResult = getDictionaryPreview(streamText, currentWord || baseResult?.word);
@@ -60,14 +63,21 @@ export function DictionaryModal({
   }, [baseResult, vocabulary]);
 
   const audioUrl = remoteResult?.audio || result?.audio || localResult?.audio;
+  const autoPlayWord = currentWord || baseResult?.word || "";
 
   useEffect(() => {
-    if (audioUrl) {
+    if (!autoPlayWord) {
+      lastAutoPlayedWordRef.current = null;
+      return;
+    }
+
+    if (audioUrl && lastAutoPlayedWordRef.current !== autoPlayWord) {
+      lastAutoPlayedWordRef.current = autoPlayWord;
       const audio = new Audio(audioUrl);
       audio.play().catch(() => {
       });
     }
-  }, [audioUrl]);
+  }, [audioUrl, autoPlayWord]);
 
   const handlePlayAudio = () => {
     if (audioUrl) {
@@ -119,6 +129,7 @@ export function DictionaryModal({
   const renderContent = () => {
     const headerResult = { ...(localResult || result || {}), ...(streamResult || {}) } as DictionaryResult;
     const detailResult = (remoteResult || streamResult) as DictionaryResult | null;
+    const isChineseLoading = isLocalLoading || isAiLoading;
     const displayWord = headerResult?.word || currentWord;
     const hasHeaderContent = Boolean(
       displayWord ||
@@ -179,7 +190,7 @@ export function DictionaryModal({
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
               中文释义
             </h3>
-            {isRemoteLoading || isAiLoading ? (
+            {isChineseLoading ? (
               headerResult?.cnDefinition ? (
                 <p className="text-xl text-slate-800 dark:text-slate-200 font-semibold">
                   {headerResult.cnDefinition}

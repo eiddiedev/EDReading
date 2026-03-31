@@ -57,6 +57,7 @@ export function ImmersiveReader({
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [localResult, setLocalResult] = useState<DictionaryResult | null>(null);
   const [remoteResult, setRemoteResult] = useState<DictionaryResult | null>(null);
+  const [isLocalLoading, setIsLocalLoading] = useState(false);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [dictionaryStreamText, setDictionaryStreamText] = useState("");
@@ -72,6 +73,7 @@ export function ImmersiveReader({
   const [wordCardData, setWordCardData] = useState<DictionaryResult | null>(null);
   
   const [wordLevels, setWordLevels] = useState<Map<string, HighlightLevel>>(new Map());
+  const prefetchedLocalWordsRef = useRef<Set<string>>(new Set());
   
   // ... (useMemo mergedResult 保持不变)
   const mergedResult = useMemo<DictionaryResult | null>(() => {
@@ -387,13 +389,48 @@ useEffect(() => {
 
   // --- Handlers (重点修改部分) ---
 
-  const handleWordClick = async (word: string) => {
+  const getNearbyWordsForPrefetch = useCallback((anchorIndex: number, currentWord: string) => {
+    const windowRadius = 160;
+    const start = Math.max(0, anchorIndex - windowRadius);
+    const end = Math.min(content.length, anchorIndex + windowRadius);
+    const chunk = content.slice(start, end);
+    const matches = chunk.match(/\b[a-zA-Z]{2,}\b/g) || [];
+    const normalizedCurrentWord = currentWord.toLowerCase();
+    const neighbors: string[] = [];
+
+    matches.forEach((item) => {
+      const normalized = item.toLowerCase();
+      if (
+        normalized === normalizedCurrentWord ||
+        prefetchedLocalWordsRef.current.has(normalized) ||
+        neighbors.includes(normalized)
+      ) {
+        return;
+      }
+      neighbors.push(normalized);
+    });
+
+    return neighbors.slice(0, 4);
+  }, [content]);
+
+  const prefetchNearbyLocalDefinitions = useCallback((anchorIndex: number, currentWord: string) => {
+    const neighbors = getNearbyWordsForPrefetch(anchorIndex, currentWord);
+    if (neighbors.length === 0) return;
+
+    neighbors.forEach((neighbor) => prefetchedLocalWordsRef.current.add(neighbor));
+    void Promise.allSettled(neighbors.map((neighbor) => lookupLocalDictionary(neighbor)));
+  }, [getNearbyWordsForPrefetch]);
+
+  const handleWordClick = async (word: string, anchorIndex?: number) => {
     if (typeof window !== "undefined") {
       window.getSelection()?.removeAllRanges();
     }
     
     const cleanWord = word.toLowerCase().trim().replace(/[^\w\s-]/g, "");
     if (cleanWord.length > 0) {
+      if (typeof anchorIndex === "number") {
+        prefetchNearbyLocalDefinitions(anchorIndex, cleanWord);
+      }
       selectedWordRef.current = cleanWord;
       setSelectedWord(cleanWord);
       setHighlightedWord(word);
@@ -401,6 +438,7 @@ useEffect(() => {
       setSelectedText(null);
       setLocalResult(null);
       setRemoteResult(null);
+      setIsLocalLoading(true);
       setIsAiLoading(false);
       setDictionaryStreamText("");
       setIsRemoteLoading(true);
@@ -462,6 +500,10 @@ useEffect(() => {
       } catch (error) {
         console.error("Dictionary lookup failed:", error);
         setIsAiLoading(false);
+      } finally {
+        if (selectedWordRef.current === cleanWord) {
+          setIsLocalLoading(false);
+        }
       }
     }
   };
@@ -487,6 +529,7 @@ useEffect(() => {
     setSelectedText(null);
     setLocalResult(null);
     setRemoteResult(null);
+    setIsLocalLoading(false);
     setIsRemoteLoading(false);
     setIsAiLoading(false);
     setDictionaryStreamText("");
@@ -639,6 +682,7 @@ useEffect(() => {
     setSelectedWord(null);
     setLocalResult(null);
     setRemoteResult(null);
+    setIsLocalLoading(false);
     setIsRemoteLoading(false);
     setIsAiLoading(false);
     setIsSheetOpen(false);
@@ -647,6 +691,7 @@ useEffect(() => {
   const closeModal = () => {
     setLocalResult(null);
     setRemoteResult(null);
+    setIsLocalLoading(false);
     setIsRemoteLoading(false);
     setIsAiLoading(false);
     setDictionaryStreamText("");
@@ -714,7 +759,7 @@ useEffect(() => {
             key={`word-${start}`}
             onClick={(e) => {
               e.stopPropagation();
-              handleWordClick(word);
+              handleWordClick(word, start);
             }}
             className={className}
           >
@@ -1105,6 +1150,7 @@ useEffect(() => {
         result={mergedResult}
         localResult={localResult}
         remoteResult={remoteResult}
+        isLocalLoading={isLocalLoading}
         isRemoteLoading={isRemoteLoading}
         isAiLoading={isAiLoading}
         streamText={dictionaryStreamText}
@@ -1117,6 +1163,7 @@ useEffect(() => {
           setSelectedWord(null);
           setLocalResult(null);
           setRemoteResult(null);
+          setIsLocalLoading(false);
           setIsRemoteLoading(false);
           setIsAiLoading(false);
         }}
