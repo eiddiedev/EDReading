@@ -52,22 +52,19 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
     }
 
     try {
-      // Direct Supabase query instead of API to ensure fields
-      let query = supabase
-        .from("articles")
-        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read, content") // Fetch content for word count check, or use summary if available
-        .eq("is_public", true)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      // Apply Level Filter
+      const searchParams = new URLSearchParams();
       if (requestedLevel) {
-        query = query.or(`difficulty.eq.${requestedLevel},tags.cs.{${requestedLevel}}`);
+        searchParams.set("level", requestedLevel);
       }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
+      const queryString = searchParams.toString();
+      const response = await fetch(`/api/community${queryString ? `?${queryString}` : ""}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`Community fetch failed with ${response.status}`);
+      }
+      const payload = await response.json();
+      const data = Array.isArray(payload?.items) ? payload.items : [];
 
       const normalizedItems = (data || []).map(
         (item: any) => ({
@@ -75,9 +72,6 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
           id: String(item.id),
           createdAt: item.createdAt || item.created_at || new Date().toISOString(),
           wordCount: item.wordCount ?? item.word_count ?? (item.content ? item.content.split(/\s+/).length : 0),
-          // We can optionally clear content here to save memory if we don't want to store full content in public list
-          // But user wants "Add to Library" to work, which needs content. 
-          // Storing 50 articles' content in memory is acceptable for text.
         })
       );
       set({ 

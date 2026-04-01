@@ -56,7 +56,7 @@ export function useArticles({ pageSize = 20, initialPage = 1, initialCount }: Us
 
       const { data, error, count } = await supabase
         .from("articles")
-        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read, content", { count: "exact" })
+        .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public, user_id, is_read", { count: "exact" })
         .eq("user_id", session.user.id)
         .order("is_read", { ascending: true })
         .order("created_at", { ascending: false })

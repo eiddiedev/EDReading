@@ -18,8 +18,10 @@ export const dynamic = "force-dynamic";
  * @route GET /api/community
  * @returns {object} 最近公开文章的列表
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const requestedLevel = searchParams.get("level")?.trim() || null;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -30,17 +32,26 @@ export async function GET() {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
     const tenDaysAgoString = tenDaysAgo.toISOString();
-    const { data: dbArticles, error } = await supabase
+    let query = supabase
       .from("articles")
       .select("id, title, title_zh, difficulty, word_count, tags, topic, created_at, is_public")
       .eq("is_public", true)
       .gt("created_at", tenDaysAgoString)
       .order("created_at", { ascending: false })
       .limit(50);
+
+    if (requestedLevel) {
+      query = query.or(`difficulty.eq.${requestedLevel},tags.cs.{${requestedLevel}}`);
+    }
+
+    const { data: dbArticles, error } = await query;
     
     if (error) throw error;
 
-    return NextResponse.json({ items: dbArticles || [] }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { items: dbArticles || [] },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     console.error("Fetch Error:", error);
     return NextResponse.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
