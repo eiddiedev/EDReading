@@ -18,16 +18,44 @@ import { toast } from "sonner";
 
 import { VocabularyWord } from "@/types";
 
+function isMissingVocabularyColumnError(
+  error: { message?: string; code?: string } | null | undefined,
+  columnName?: string
+) {
+  const rawMessage = error?.message || "";
+  const normalized = rawMessage.toLowerCase();
+  const normalizedColumn = columnName?.toLowerCase();
+
+  if (!normalized) return false;
+
+  const mentionsColumn = normalizedColumn
+    ? normalized.includes(normalizedColumn)
+    : normalized.includes("column");
+
+  return (
+    mentionsColumn &&
+    (
+      normalized.includes("does not exist") ||
+      normalized.includes("schema cache") ||
+      normalized.includes("could not find")
+    )
+  );
+}
+
 function getVocabularyWriteErrorMessage(error: { message?: string; code?: string } | null | undefined) {
   const rawMessage = error?.message || "";
   const normalized = rawMessage.toLowerCase();
 
+  if (isMissingVocabularyColumnError(error, "audio")) {
+    return "生词本写入失败：线上数据库缺少 `audio` 字段，请同步最新迁移。";
+  }
+
   if (normalized.includes("column") && normalized.includes("does not exist")) {
-    return "生词本写入失败：dev 数据库的 vocabulary 表字段不完整，请同步最新迁移。";
+    return "生词本写入失败：数据库的 vocabulary 表字段不完整，请同步最新迁移。";
   }
 
   if (normalized.includes("row-level security") || error?.code === "42501") {
-    return "生词本写入失败：当前 dev 数据库的 vocabulary 表 RLS 策略或登录态有问题。";
+    return "生词本写入失败：当前数据库的 vocabulary 表 RLS 策略或登录态有问题。";
   }
 
   if (normalized.includes("invalid input syntax for type uuid")) {
@@ -84,12 +112,11 @@ export const createReviewSlice: StateCreator<AppState, [], [], ReviewSlice> = (s
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(word.id);
     const finalId = isUUID ? word.id : crypto.randomUUID();
 
-    const { error } = await supabase.from("vocabulary").upsert({
+    const basePayload = {
       id: finalId,
       user_id: session.user.id,
       word: word.word,
       phonetic: word.phonetic,
-      audio: resolvedAudio,
       definition: word.definition,
       translation: word.exampleTranslation,
       example: word.example,
@@ -100,7 +127,18 @@ export const createReviewSlice: StateCreator<AppState, [], [], ReviewSlice> = (s
       next_review_at: nextReview.toISOString(),
       tags: [],
       created_at: word.createdAt,
+    };
+
+    let { error } = await supabase.from("vocabulary").upsert({
+      ...basePayload,
+      audio: resolvedAudio,
     });
+
+    if (isMissingVocabularyColumnError(error, "audio")) {
+      console.warn("Vocabulary table is missing audio column, retrying without audio field.");
+      const retryResult = await supabase.from("vocabulary").upsert(basePayload);
+      error = retryResult.error;
+    }
 
     if (error) {
       console.error("Failed to sync vocabulary to Supabase:", error);
