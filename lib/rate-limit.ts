@@ -35,6 +35,15 @@ export async function checkRateLimit(userId: string, endpoint: string = "analyze
       if (profile && profile.email && ADMIN_EMAILS.includes(profile.email.toLowerCase())) {
         return { allowed: true };
       }
+
+      // Fallback: profiles may be stale or missing email, so verify against auth.users.
+      const { data: authUser, error: authUserError } = await supabase.auth.admin.getUserById(userId);
+      if (!authUserError) {
+        const email = authUser?.user?.email?.toLowerCase();
+        if (email && ADMIN_EMAILS.includes(email)) {
+          return { allowed: true };
+        }
+      }
     } catch (e) {
       console.error("Admin check failed", e);
     }
