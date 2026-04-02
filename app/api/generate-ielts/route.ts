@@ -220,6 +220,7 @@ export async function POST(req: Request) {
             { role: "user", content: "Generate now." },
           ],
           temperature: 1.25, // 提高一点温度，增加创造性
+          stream: true,
           response_format: { type: "json_object" },
         }),
         signal: controller.signal,
