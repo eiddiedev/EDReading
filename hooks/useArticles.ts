@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { Article } from "@/types";
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/store";
+import { getAllArticles } from "@/lib/storage";
 
 interface UseArticlesProps {
   pageSize?: number;
@@ -81,13 +82,21 @@ export function useArticles({ pageSize = 20, initialPage = 1, initialCount }: Us
       let newHasMore = hasMore;
       let newPage = page;
 
+      // Preserve local-only articles when merging with cloud data
+      const localOnlyArticles = articles.filter(a => a.is_local_only);
+
       if (overrideLimit) {
-        // If overriding, we replace all articles
-        newArticles = normalizedArticles;
+        // If overriding, we replace all articles (but keep local-only)
+        const cloudIds = new Set(normalizedArticles.map((a: Article) => a.id));
+        const keptLocal = localOnlyArticles.filter(a => !cloudIds.has(a.id));
+        newArticles = [...keptLocal, ...normalizedArticles];
         // Update page based on limit
         newPage = Math.ceil(overrideLimit / pageSize);
       } else if (isRefresh || targetPage === 1) {
-        newArticles = normalizedArticles;
+        // Refresh: keep local-only articles that don't exist in cloud
+        const cloudIds = new Set(normalizedArticles.map((a: Article) => a.id));
+        const keptLocal = localOnlyArticles.filter(a => !cloudIds.has(a.id));
+        newArticles = [...keptLocal, ...normalizedArticles];
         newPage = 1;
       } else {
         // Dedup based on ID
@@ -124,19 +133,57 @@ export function useArticles({ pageSize = 20, initialPage = 1, initialCount }: Us
     }
   }, [pageSize, articles, hasMore, page, setPagedState]);
 
+  // Restore local articles from IndexedDB on initial load
+  const restoreLocalArticles = useCallback(async () => {
+    try {
+      const localArticles = await getAllArticles();
+      if (localArticles.length > 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+
+        // Filter: only restore articles that belong to current user or are local-only
+        const relevantArticles = localArticles.filter((a: Article) =>
+          a.is_local_only || !a.user_id || a.user_id === userId
+        );
+
+        if (relevantArticles.length > 0) {
+          // Get current state to avoid stale closure
+          const currentState = useAppStore.getState();
+          const existingIds = new Set(currentState.pagedArticles.map(a => a.id));
+
+          // Only add articles that don't already exist
+          const newArticles = relevantArticles.filter(a => !existingIds.has(a.id));
+
+          if (newArticles.length > 0) {
+            setPagedState(
+              [...newArticles, ...currentState.pagedArticles],
+              currentState.pagedHasMore,
+              currentState.pagedPage
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to restore local articles:", e);
+    }
+  }, [setPagedState]);
+
   // Initial load
   useEffect(() => {
     // If we already have articles in store, and we are not forcing refresh, do nothing?
     // But what if user added new articles elsewhere?
     // For now, if store is empty, we fetch.
     // If store has data, we trust it for "Back" navigation.
-    // But we might want to refresh if it's been a while? 
+    // But we might want to refresh if it's been a while?
     // Let's rely on explicit refresh or empty state.
-    
+
     if (articles.length === 0) {
-        fetchArticles(1, true);
+        // First restore from IndexedDB, then fetch from cloud
+        restoreLocalArticles().then(() => {
+          fetchArticles(1, true);
+        });
     }
-  }, [fetchArticles, articles.length]); 
+  }, [fetchArticles, articles.length, restoreLocalArticles]); 
 
   const loadMore = useCallback(() => {
     if (!isLoading && hasMore) {

@@ -120,6 +120,16 @@ export const deleteArticle = async (id: string) => {
   await db.delete(ARTICLE_STORE, id);
 };
 
+export const getAllArticles = async (): Promise<Article[]> => {
+  const db = await initDB();
+  return db.getAll(ARTICLE_STORE);
+};
+
+export const getArticle = async (id: string): Promise<Article | undefined> => {
+  const db = await initDB();
+  return db.get(ARTICLE_STORE, id);
+};
+
 export const clearLibrary = async () => {
   const db = await initDB();
   const tx = db.transaction([METADATA_STORE, FILE_STORE], 'readwrite');
