@@ -16,7 +16,10 @@ jobs:
 
       - name: Create source package
         run: |
-          tar -czf deploy.tar.gz \
+          PACKAGE_PATH="/tmp/edreading-deploy.tar.gz"
+          rm -f "$PACKAGE_PATH"
+
+          tar -czf "$PACKAGE_PATH" \
             --exclude=.git \
             --exclude=.github \
             --exclude=.next \
@@ -26,6 +29,8 @@ jobs:
             --exclude=.env \
             --exclude=.env.* \
             .
+
+          cp "$PACKAGE_PATH" ./deploy.tar.gz
 
       - name: Copy source package to server
         uses: appleboy/scp-action@v0.1.7
