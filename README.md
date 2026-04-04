@@ -186,4 +186,4 @@ npm start
 
 ## 贡献与反馈
 
-欢迎提交 Issue 或 PR 来帮助改进 EDReading。对于功能建议、Bug 反馈与文档补充，均非常欢迎。
+欢迎提交 Issue 或 PR 来帮助改进 EDReading,对于功能建议、Bug 反馈与文档补充，均非常欢迎。 

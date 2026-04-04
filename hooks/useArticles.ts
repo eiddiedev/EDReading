@@ -142,9 +142,10 @@ export function useArticles({ pageSize = 20, initialPage = 1, initialCount }: Us
         const userId = session?.user?.id;
 
         // Filter: only restore articles that belong to current user or are local-only
-        const relevantArticles = localArticles.filter((a: Article) =>
-          a.is_local_only || !a.user_id || a.user_id === userId
-        );
+        const relevantArticles = localArticles.filter((a: Article) => {
+          const articleOwnerId = a.user_id ?? a.userId;
+          return a.is_local_only || !articleOwnerId || articleOwnerId === userId;
+        });
 
         if (relevantArticles.length > 0) {
           // Get current state to avoid stale closure
