@@ -130,22 +130,22 @@ npm start
 
 ### 宝塔面板部署（PM2 项目）
 
-如果你想把职责拆清楚，推荐改成这条链路：
+如果你想兼顾“自动部署”和“宝塔可管理”，推荐这条链路：
 
-- GitHub Actions：只负责把源码同步到服务器
-- 服务器上的宝塔面板：负责安装依赖、构建、重启 PM2、查看日志
+- GitHub Actions：负责安装依赖、构建产物、上传部署包
+- 服务器上的宝塔面板：负责管理 PM2 进程、查看日志、反向代理
 
-当前仓库已经提供了可直接用于 PM2 的 [`ecosystem.config.js`](C:\Users\TL\Desktop\ereading\EDReading\ecosystem.config.js)，并且 [`deploy.yml`](C:\Users\TL\Desktop\ereading\EDReading\.github\workflows\deploy.yml) 已调整为“只上传源码，不在 GitHub 上构建”。
+当前仓库已经提供了可直接用于 PM2 的 [`ecosystem.config.js`](C:\Users\TL\Desktop\ereading\EDReading\ecosystem.config.js)，并且 [`deploy.yml`](C:\Users\TL\Desktop\ereading\EDReading\.github\workflows\deploy.yml) 已调整为“GitHub 上构建，服务器只接收部署产物并用 PM2 重载”。
 
 推荐的服务器目录结构：
 
 ```bash
 /var/www/edreading
-  ├─ package.json
-  ├─ ecosystem.config.js
-  ├─ app/
-  ├─ components/
+  ├─ .next/
   ├─ public/
+  ├─ ecosystem.config.js
+  ├─ package.json
+  ├─ package-lock.json
   ├─ .env.local
   └─ logs/
 ```
@@ -174,8 +174,6 @@ AI_MODEL=gpt-4o-mini
 首次接管时，先在服务器项目目录执行一次：
 
 ```bash
-npm ci
-npm run build
 mkdir -p logs
 pm2 startOrReload ecosystem.config.js --env production
 pm2 save
@@ -183,11 +181,12 @@ pm2 save
 
 说明：
 
-- GitHub Actions 不再执行 `npm ci`、`npm run build`、`pm2 reload`，只会把源码同步到 `/var/www/edreading`。
+- GitHub Actions 会执行 `npm ci`、`npm run build`，然后把 `.next`、`public`、`package.json`、`package-lock.json`、`ecosystem.config.js` 等运行所需文件上传到服务器。
 - `ecosystem.config.js` 默认使用当前项目目录作为运行目录，日志输出到项目下的 `logs/`。
+- 服务器端仍会执行 `npm ci --omit=dev` 安装生产依赖，但不会再执行 `npm run build`。
 - `package.json` 当前使用 `next start -H 0.0.0.0 -p 3000`，适合让宝塔/Nginx 反向代理到 `3000` 端口。
 - 如果后续要多实例部署，可以增加环境变量 `PM2_INSTANCES=2`；默认仍建议单实例。
-- 宝塔本身不会因为源码变更自动生成 `.next`。如果你希望真正全自动，仍需要在宝塔里配置部署后脚本，或者让宝塔的项目管理流程在代码更新后执行 `npm ci && npm run build && pm2 reload`。
+- 这条链路下不需要服务器参与构建，部署耗时和失败点都会比“服务器自己构建”更少。
 
 Nginx 反向代理可参考：
 

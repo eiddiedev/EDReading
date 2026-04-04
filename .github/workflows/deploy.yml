@@ -14,25 +14,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create source package
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.1"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Create deployment package
         run: |
           PACKAGE_PATH="/tmp/edreading-deploy.tar.gz"
           rm -f "$PACKAGE_PATH"
 
           tar -czf "$PACKAGE_PATH" \
-            --exclude=.git \
-            --exclude=.github \
-            --exclude=.next \
-            --exclude=node_modules \
-            --exclude=logs \
-            --exclude=.vercel \
-            --exclude=.env \
-            --exclude=.env.* \
-            .
+            .next/ \
+            public/ \
+            package.json \
+            package-lock.json \
+            next.config.mjs \
+            postcss.config.mjs \
+            tailwind.config.ts \
+            tsconfig.json \
+            ecosystem.config.js
 
           cp "$PACKAGE_PATH" ./deploy.tar.gz
 
-      - name: Copy source package to server
+      - name: Copy deployment files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -43,7 +60,7 @@ jobs:
           source: "deploy.tar.gz"
           target: "/tmp"
 
-      - name: Sync source on server
+      - name: Deploy on server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -56,44 +73,35 @@ jobs:
 
             DEPLOY_DIR="/var/www/edreading"
             BACKUP_DIR="/var/www/edreading-backups"
-            TEMP_DIR="/tmp/edreading-source"
 
             echo "Creating backup directory..."
-            mkdir -p $BACKUP_DIR
+            mkdir -p "$BACKUP_DIR"
 
             if [ -d "$DEPLOY_DIR" ]; then
-              echo "Backing up current source..."
+              echo "Backing up current deployment..."
               timestamp=$(date +%Y%m%d_%H%M%S)
-              if [ -f "$DEPLOY_DIR/package.json" ]; then
+              if [ -d "$DEPLOY_DIR/.next" ]; then
                 tar -czf "$BACKUP_DIR/backup_$timestamp.tar.gz" -C "$DEPLOY_DIR" .
                 echo "Backup created: backup_$timestamp.tar.gz"
               fi
             fi
 
-            echo "Preparing temporary source directory..."
-            rm -rf "$TEMP_DIR"
-            mkdir -p "$TEMP_DIR"
+            echo "Preparing deployment directory..."
+            mkdir -p "$DEPLOY_DIR"
+            mkdir -p "$DEPLOY_DIR/logs"
 
-            echo "Extracting source package..."
-            tar -xzf /tmp/deploy.tar.gz -C "$TEMP_DIR"
+            echo "Extracting new deployment..."
+            tar -xzf /tmp/deploy.tar.gz -C "$DEPLOY_DIR"
             rm /tmp/deploy.tar.gz
 
-            echo "Preparing deployment directory..."
-            mkdir -p $DEPLOY_DIR
+            echo "Installing production dependencies..."
+            cd "$DEPLOY_DIR"
+            npm ci --omit=dev
 
-            echo "Synchronizing source files..."
-            find "$DEPLOY_DIR" -mindepth 1 -maxdepth 1 \
-              ! -name '.env.local' \
-              ! -name '.env.production' \
-              ! -name '.env' \
-              ! -name 'node_modules' \
-              ! -name '.next' \
-              ! -name 'logs' \
-              -exec rm -rf {} +
+            echo "Reloading PM2 process..."
+            pm2 startOrReload ecosystem.config.js --env production
 
-            cp -a "$TEMP_DIR"/. "$DEPLOY_DIR"/
+            echo "Saving PM2 configuration..."
+            pm2 save
 
-            rm -rf "$TEMP_DIR"
-
-            echo "Source sync completed successfully."
-            echo "Next step is handled on the server side: install deps, build, and restart via Baota/PM2."
+            echo "Deployment completed successfully!"
