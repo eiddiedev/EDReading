@@ -1,4 +1,4 @@
-# EDReading  
+# EDReading
 
 EDReading 是一款面向雅思阅读场景的英语阅读与词汇记忆应用。它提供高质量的 EPUB 阅读体验、划词查义与句子语法/翻译分析、AI 词典/短语/语法能力，以及基于艾宾浩斯曲线的复习机制。
 
@@ -128,78 +128,6 @@ npm run build
 npm start
 ```
 
-### 宝塔面板部署（PM2 项目）
-
-如果你想兼顾“自动部署”和“宝塔可管理”，推荐这条链路：
-
-- GitHub Actions：负责安装依赖、构建产物、上传部署包
-- 服务器上的宝塔面板：负责管理 PM2 进程、查看日志、反向代理
-
-当前仓库已经提供了可直接用于 PM2 的 [`ecosystem.config.js`](C:\Users\TL\Desktop\ereading\EDReading\ecosystem.config.js)，并且 [`deploy.yml`](C:\Users\TL\Desktop\ereading\EDReading\.github\workflows\deploy.yml) 已调整为“GitHub 上构建，服务器只接收部署产物并用 PM2 重载”。
-
-推荐的服务器目录结构：
-
-```bash
-/var/www/edreading
-  ├─ .next/
-  ├─ public/
-  ├─ ecosystem.config.js
-  ├─ package.json
-  ├─ package-lock.json
-  ├─ .env.local
-  └─ logs/
-```
-
-宝塔面板添加 Node 项目时，建议使用“PM2项目”，字段这样填：
-
-- 项目名称：`edreading`
-- Node 版本：`20+`，建议 `22 LTS`
-- 启动文件：项目根目录下的 `ecosystem.config.js`
-- 运行目录：项目根目录，例如 `/www/wwwroot/EDReading`
-- 负载实例数量：`1`
-- 内存上限：`1024 MB`
-- 包管理器：`npm`
-
-部署前，需要先在服务器项目根目录手动准备 `.env.local`，至少包含：
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=你的SupabaseURL
-NEXT_PUBLIC_SUPABASE_ANON_KEY=你的SupabaseAnonKey
-SUPABASE_SERVICE_ROLE_KEY=你的ServiceRoleKey
-AI_API_KEY=你的OpenAIKey
-AI_BASE_URL=https://api.openai.com/v1
-AI_MODEL=gpt-4o-mini
-```
-
-首次接管时，先在服务器项目目录执行一次：
-
-```bash
-mkdir -p logs
-pm2 startOrReload ecosystem.config.js --env production
-pm2 save
-```
-
-说明：
-
-- GitHub Actions 会执行 `npm ci`、`npm run build`，然后把 `.next`、`public`、`package.json`、`package-lock.json`、`ecosystem.config.js` 等运行所需文件上传到服务器。
-- `ecosystem.config.js` 默认使用当前项目目录作为运行目录，日志输出到项目下的 `logs/`。
-- 服务器端仍会执行 `npm ci --omit=dev` 安装生产依赖，但不会再执行 `npm run build`。
-- `package.json` 当前使用 `next start -H 0.0.0.0 -p 3000`，适合让宝塔/Nginx 反向代理到 `3000` 端口。
-- 如果后续要多实例部署，可以增加环境变量 `PM2_INSTANCES=2`；默认仍建议单实例。
-- 这条链路下不需要服务器参与构建，部署耗时和失败点都会比“服务器自己构建”更少。
-
-Nginx 反向代理可参考：
-
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
-
 ## 开发脚本
 
 - `npm run dev`：启动本地开发服务
@@ -258,4 +186,4 @@ location / {
 
 ## 贡献与反馈
 
-欢迎提交 Issue 或 PR 来帮助改进 EDReading,对于功能建议、Bug 反馈与文档补充，均非常欢迎。 
+欢迎提交 Issue 或 PR 来帮助改进 EDReading,对于功能建议、Bug 反馈与文档补充，均非常欢迎。
