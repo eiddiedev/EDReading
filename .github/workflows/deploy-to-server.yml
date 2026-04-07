@@ -1,0 +1,106 @@
+name: Deploy To Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify local build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Start ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          PORT="${SERVER_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync project files
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          PORT="${SERVER_PORT:-22}"
+          USER_NAME="${SERVER_USER:-root}"
+
+          rsync -az \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "node_modules" \
+            --exclude ".next" \
+            --exclude ".env.local" \
+            --exclude ".env.production" \
+            --exclude ".vercel" \
+            --exclude ".qoder" \
+            --exclude ".trae" \
+            --exclude ".codex" \
+            --exclude "repomix-output.xml" \
+            -e "ssh -p $PORT" \
+            ./ "$USER_NAME@$SERVER_HOST:/www/wwwroot/EDReading/"
+
+      - name: Install, build and restart service
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          PORT="${SERVER_PORT:-22}"
+          USER_NAME="${SERVER_USER:-root}"
+
+          ssh -p "$PORT" "$USER_NAME@$SERVER_HOST" <<'EOF'
+          set -e
+
+          APP_DIR="/www/wwwroot/EDReading"
+          APP_NAME="edreading"
+
+          mkdir -p "$APP_DIR"
+          cd "$APP_DIR"
+
+          if ! command -v npm >/dev/null 2>&1; then
+            echo "npm is not installed on the server."
+            exit 1
+          fi
+
+          npm ci
+          npm run build
+
+          if command -v pm2 >/dev/null 2>&1; then
+            pm2 startOrReload ecosystem.config.cjs --env production
+            pm2 save
+          elif command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${APP_NAME}\.service"; then
+            systemctl restart "${APP_NAME}.service"
+          else
+            echo "No supported process manager found. Install pm2 or create ${APP_NAME}.service first."
+            exit 1
+          fi
+          EOF
