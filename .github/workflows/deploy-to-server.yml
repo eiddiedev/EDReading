@@ -90,12 +90,17 @@ jobs:
 
           APP_DIR="/www/wwwroot/EDReading"
           APP_NAME="edreading"
+          NODE_DIR="/www/server/nodejs/v24.14.1/bin"
+
+          if [ -d "$NODE_DIR" ]; then
+            export PATH="$NODE_DIR:$PATH"
+          fi
 
           mkdir -p "$APP_DIR"
           cd "$APP_DIR"
 
           if ! command -v npm >/dev/null 2>&1; then
-            echo "npm is not installed on the server."
+            echo "npm is not available on the server PATH."
             exit 1
           fi
 
