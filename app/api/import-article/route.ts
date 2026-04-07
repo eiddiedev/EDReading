@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { checkContentSafety } from "@/lib/safety";
 import { IELTS_VOCAB_DB } from "@/lib/ielts-vocabulary";
 import type { VocabularyCategory, VocabularyDatabase } from "@/types";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createAdminClient } from "@/lib/supabase-admin";
 
 const VOCAB_DB = IELTS_VOCAB_DB as VocabularyDatabase;
 
@@ -69,6 +64,7 @@ const truncateToWords = (input: string, limit: number) => {
 
 export async function POST(request: Request) {
   try {
+    const supabase = createAdminClient();
     const { text, userId, level = "IELTS", topicId, userTitle } = await request.json();
 
     if (!text || !userId) {

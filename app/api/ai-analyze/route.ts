@@ -3,16 +3,11 @@
  */
 import { NextResponse } from "next/server";
 import { checkContentSafety } from "@/lib/safety";
-import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = 'edge';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 const countWords = (input: string) => {
   const normalized = input.trim();
@@ -50,6 +45,7 @@ async function getSHA256Hash(message: string) {
  */
 export async function POST(req: Request) {
   try {
+    const supabase = createAdminClient();
     const { text, userId, level = "IELTS", topicId } = await req.json();
 
     if (!text || !userId) {

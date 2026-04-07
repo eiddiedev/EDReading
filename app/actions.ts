@@ -7,14 +7,9 @@ import { checkContentSafety } from "@/lib/safety";
 import type { AIProcessResult } from "@/lib/ai-processor";
 import { IELTS_VOCAB_DB } from "@/lib/ielts-vocabulary";
 import type { VocabularyCategory, VocabularyDatabase } from "@/types";
-import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@/lib/rate-limit";
 import crypto from "crypto";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createAdminClient } from "@/lib/supabase-admin";
 
 const VOCAB_DB = IELTS_VOCAB_DB as VocabularyDatabase;
 
@@ -78,6 +73,7 @@ export async function analyzeArticleWithAI(
   topicId?: string,
   userTitle?: string
 ): Promise<AIProcessResult> {
+  const supabase = createAdminClient();
   const slicedText = text.slice(0, 3500);
   const normalizedText = truncateToWords(slicedText, 3500);
 

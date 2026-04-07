@@ -8,20 +8,17 @@
  * 3. 长期限流：查询 Supabase `api_usage_logs` 表，限制每日请求次数。
  * 4. 记录每次合法的 API 调用到数据库。
  */
-import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
-import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
+import { ADMIN_EMAILS } from "@/lib/constants";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 // Simple in-memory cache for short-term rate limiting (1 minute)
 // Key: IP, Value: Timestamp of last request
 const shortTermCache = new Map<string, number>();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function checkRateLimit(userId: string, endpoint: string = "analyze", limit?: number): Promise<{ allowed: boolean; reason?: string }> {
+  const supabase = createAdminClient();
+
   // 0. Admin Bypass (Infinite Quota)
   if (userId) {
     try {
@@ -62,7 +59,6 @@ export async function checkRateLimit(userId: string, endpoint: string = "analyze
 
   // 0. Anti-Abuse: Check Origin/Referer (Simple bot protection)
   const origin = headersList.get("origin");
-  const referer = headersList.get("referer");
   const host = headersList.get("host"); // e.g. localhost:3000 or myapp.com
   
   // Allow requests from same host or null (server-to-server might be null, but browser actions usually have origin/referer)
@@ -92,8 +88,6 @@ export async function checkRateLimit(userId: string, endpoint: string = "analyze
   if (endpoint === "analyze_article") {
     dailyLimit = 5; // Default for article import
   }
-  const userIdentifier = userId || ip; // Use IP for guests
-
   let query = supabase
     .from("api_usage_logs")
     .select("*", { count: "exact", head: true })
