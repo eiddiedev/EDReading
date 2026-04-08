@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getRequestProtocol, getSupabaseCookieOptions } from './lib/supabase-cookie-options'
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -12,9 +13,9 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      cookieOptions: {
-        name: 'sb-edreading-auth-token',
-      },
+      cookieOptions: getSupabaseCookieOptions({
+        protocol: getRequestProtocol(request.headers),
+      }),
       cookies: {
         getAll() {
           return request.cookies.getAll()
