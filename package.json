@@ -10,8 +10,11 @@
     "lint:fix": "eslint --fix"
   },
   "dependencies": {
+    "@chenglou/pretext": "^0.0.5",
     "@fingerprintjs/fingerprintjs": "^5.0.1",
     "@mozilla/readability": "^0.6.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.0",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
@@ -34,6 +37,7 @@
     "rss-parser": "^3.13.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
+    "three": "^0.183.2",
     "zustand": "^4.5.2"
   },
   "devDependencies": {

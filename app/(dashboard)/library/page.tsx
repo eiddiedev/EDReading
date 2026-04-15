@@ -4,13 +4,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback, useLayoutEffect } from "react";
+import Link from "next/link";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { ArticleCard } from "@/components/ArticleCard";
 import { PasteToReadModal } from "@/components/PasteToReadModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { TopicSelectionModal, IELTS_TOPICS } from "@/components/TopicSelectionModal";
-import { Sparkles, Plus, Loader2, RefreshCw } from "lucide-react";
+import { Sparkles, Plus, Loader2, RefreshCw, Orbit } from "lucide-react";
 import { Article } from "@/types";
 import { toast } from "sonner";
 import { triggerHaptic } from "@/lib/utils";
@@ -493,6 +494,13 @@ export default function LibraryPage() {
             {tab.label}
           </button>
         ))}
+        <Link
+          href="/featured"
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-300 transition-all"
+        >
+          <Orbit className="w-4 h-4" />
+          精选文章
+        </Link>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
