@@ -15,11 +15,14 @@ interface ContourSamplerProps {
     height: number;
   };
   sampleScale: number;
+  sampleIntervalMs?: number;
   onFrame: (frame: ContourFrame) => void;
 }
 
 const MIN_FRAGMENT_WIDTH = 84;
 const SILHOUETTE_PADDING = 18;
+const SAMPLE_INTERVAL_MS = 140;
+const MASK_THRESHOLD = 24;
 
 function hashRowSpans(rowSpans: RowSpan[]): number {
   let hash = 17;
@@ -39,12 +42,14 @@ export function ContourSampler({
   rowHeight,
   textBox,
   sampleScale,
+  sampleIntervalMs = SAMPLE_INTERVAL_MS,
   onFrame,
 }: ContourSamplerProps) {
   const { gl, size, scene, camera } = useThree();
   const renderTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const pixelBufferRef = useRef<Uint8Array | null>(null);
   const lastHashRef = useRef<number | null>(null);
+  const lastSampleAtRef = useRef(0);
 
   const maskMaterial = useMemo(
     () =>
@@ -63,8 +68,12 @@ export function ContourSampler({
     };
   }, [maskMaterial]);
 
-  useFrame(() => {
+  useFrame((state) => {
     if (!enabled || textBox.width <= 0 || textBox.height <= 0) return;
+
+    const now = state.clock.elapsedTime * 1000;
+    if (now - lastSampleAtRef.current < sampleIntervalMs) return;
+    lastSampleAtRef.current = now;
 
     const targetWidth = Math.max(64, Math.floor(size.width * sampleScale));
     const targetHeight = Math.max(64, Math.floor(size.height * sampleScale));
@@ -114,7 +123,7 @@ export function ContourSampler({
     scene.overrideMaterial = maskMaterial;
     gl.autoClear = true;
     gl.setRenderTarget(renderTarget);
-    gl.setClearColor(0x000000, 1);
+    gl.setClearColor(0x000000, 0);
     gl.clear(true, true, true);
     gl.render(scene, camera);
     gl.readRenderTargetPixels(
@@ -143,8 +152,12 @@ export function ContourSampler({
       for (let row = y; row < bandEnd; row += 1) {
         const rowOffset = row * scaledWidth * 4;
         for (let x = 0; x < scaledWidth; x += 1) {
-          const alpha = pixels[rowOffset + x * 4];
-          if (alpha > 16) {
+          const red = pixels[rowOffset + x * 4];
+          const green = pixels[rowOffset + x * 4 + 1];
+          const blue = pixels[rowOffset + x * 4 + 2];
+          const brightness = Math.max(red, green, blue);
+
+          if (brightness > MASK_THRESHOLD) {
             if (x < minX) minX = x;
             if (x > maxX) maxX = x;
           }

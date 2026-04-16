@@ -106,13 +106,21 @@ export function PretextContourText({
           continue;
         }
       } else {
-        const width = Math.max(row.leftWidth, row.rightWidth || 0, textBox.width);
+        const usesFullRow = row.rightWidth === 0 && Math.abs(row.leftWidth - textBox.width) < 1;
+        const width = usesFullRow ? textBox.width : Math.max(row.leftWidth, row.rightWidth || 0);
+        const x = usesFullRow || row.leftWidth >= row.rightWidth ? row.leftStart : row.rightStart;
+
+        if (width < MIN_FRAGMENT_WIDTH) {
+          rowIndex += 1;
+          continue;
+        }
+
         const line = layoutNextLine(prepared, cursor, width);
 
         if (line) {
           segments.push({
             text: line.text,
-            x: row.leftStart,
+            x,
             y: row.y,
             width,
             rowIndex,
@@ -156,14 +164,14 @@ export function PretextContourText({
         : baseline.height;
 
     return { segments, height };
-  }, [contourFrame?.hash, contourFrame?.rowSpans, lineHeight, prepared, textBox.width]);
+  }, [contourFrame?.rowSpans, lineHeight, prepared, textBox.width]);
 
   useEffect(() => {
     onMetricsChange({ height: rendered.height });
   }, [onMetricsChange, rendered.height]);
 
   return (
-    <div className="absolute inset-0 z-20 pointer-events-none select-none">
+    <div className="absolute inset-0 z-20 pointer-events-none select-text">
       <div
         className="absolute"
         style={{
@@ -176,7 +184,7 @@ export function PretextContourText({
         {rendered.segments.map((segment, index) => (
           <div
             key={`${segment.rowIndex}-${segment.segment}-${index}`}
-            className="absolute text-slate-800 dark:text-slate-100"
+            className="absolute pointer-events-auto select-text text-slate-800 dark:text-slate-100"
             style={{
               left: segment.x,
               top: segment.y,

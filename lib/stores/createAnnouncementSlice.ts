@@ -14,6 +14,27 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { ADMIN_EMAIL, ADMIN_EMAILS } from "@/lib/constants";
 
+function formatAnnouncementError(error: unknown) {
+  if (!error || typeof error !== "object") return "unknown error";
+
+  const maybeError = error as {
+    code?: string;
+    message?: string;
+    details?: string;
+    hint?: string;
+    name?: string;
+  };
+
+  return (
+    maybeError.message ||
+    maybeError.details ||
+    maybeError.hint ||
+    maybeError.code ||
+    maybeError.name ||
+    "unknown error"
+  );
+}
+
 export const createAnnouncementSlice: StateCreator<AppState, [], [], AnnouncementSlice> = (set, get) => ({
   latestAnnouncement: null,
 
@@ -28,7 +49,8 @@ export const createAnnouncementSlice: StateCreator<AppState, [], [], Announcemen
         .maybeSingle();
 
       if (error) {
-        console.error("Failed to fetch announcement:", error);
+        set({ latestAnnouncement: null });
+        console.warn("Failed to fetch announcement:", formatAnnouncementError(error));
         return;
       }
 
@@ -44,7 +66,8 @@ export const createAnnouncementSlice: StateCreator<AppState, [], [], Announcemen
         set({ latestAnnouncement: null });
       }
     } catch (e) {
-      console.error("Error fetching announcement:", e);
+      set({ latestAnnouncement: null });
+      console.warn("Error fetching announcement:", formatAnnouncementError(e));
     }
   },
 

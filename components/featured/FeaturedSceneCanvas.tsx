@@ -1,10 +1,11 @@
 "use client";
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Center, OrbitControls, useGLTF } from "@react-three/drei";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { ContourSampler } from "@/components/featured/ContourSampler";
+import { FEATURED_MODEL_SRCS } from "@/lib/featured/demo-content";
 import type { ContourFrame, FeaturedCameraPreset } from "@/types";
 
 interface FeaturedSceneCanvasProps {
@@ -20,20 +21,28 @@ interface FeaturedSceneCanvasProps {
     height: number;
   };
   rowHeight: number;
+  resetVersion: number;
+  showModel: boolean;
   onContourFrame: (frame: ContourFrame) => void;
 }
 
 class SceneErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
+  { children: React.ReactNode; fallback: React.ReactNode; sceneKey: string },
   { hasError: boolean }
 > {
-  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode; sceneKey: string }) {
     super(props);
     this.state = { hasError: false };
   }
 
   static getDerivedStateFromError() {
     return { hasError: true };
+  }
+
+  componentDidUpdate(previousProps: { sceneKey: string }) {
+    if (previousProps.sceneKey !== this.props.sceneKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
   }
 
   render() {
@@ -47,15 +56,32 @@ class SceneErrorBoundary extends React.Component<
 
 function DemoModel({ modelSrc, accentColor }: { modelSrc: string; accentColor: string }) {
   const gltf = useGLTF(modelSrc);
-  const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const { camera, size: canvasSize } = useThree();
   const tint = useMemo(() => new THREE.Color(accentColor), [accentColor]);
+  const scene = useMemo(() => {
+    const clone = gltf.scene.clone(true);
+    const box = new THREE.Box3().setFromObject(clone);
+    const center = box.getCenter(new THREE.Vector3());
+    const modelSize = box.getSize(new THREE.Vector3());
+    const perspectiveCamera =
+      camera instanceof THREE.PerspectiveCamera ? camera : new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+    const distance = perspectiveCamera.position.length();
+    const visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(perspectiveCamera.fov / 2)) * distance;
+    const visibleWidth = visibleHeight * (canvasSize.width / Math.max(canvasSize.height, 1));
+    const fitHeight = (visibleHeight * 0.72) / Math.max(modelSize.y, 1);
+    const fitWidth = (visibleWidth * 0.42) / Math.max(modelSize.x, 1);
+    const fitDepth = 3.2 / Math.max(modelSize.z, 1);
+    const scale = Math.min(fitHeight, fitWidth, fitDepth);
+
+    clone.position.set(-center.x, -center.y, -center.z);
+    clone.scale.setScalar(scale);
+
+    return clone;
+  }, [camera, canvasSize.height, canvasSize.width, gltf.scene]);
 
   useMemo(() => {
     scene.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
-
-      child.castShadow = true;
-      child.receiveShadow = true;
 
       const materials = Array.isArray(child.material)
         ? child.material
@@ -71,12 +97,28 @@ function DemoModel({ modelSrc, accentColor }: { modelSrc: string; accentColor: s
   }, [scene, tint]);
 
   return (
-    <group position={[0, 0.08, 0]}>
-      <Center disableY>
-        <primitive object={scene} scale={1.85} />
-      </Center>
+    <group position={[0, 0.12, 0]}>
+      <primitive object={scene} />
     </group>
   );
+}
+
+function CameraReset({
+  cameraPreset,
+  resetVersion,
+}: {
+  cameraPreset: FeaturedCameraPreset;
+  resetVersion: number;
+}) {
+  const { camera, invalidate } = useThree();
+
+  useEffect(() => {
+    camera.position.set(...cameraPreset.initialPosition);
+    camera.lookAt(...cameraPreset.target);
+    invalidate();
+  }, [camera, cameraPreset, invalidate, resetVersion]);
+
+  return null;
 }
 
 function SceneContents({
@@ -86,33 +128,42 @@ function SceneContents({
   modelSrc,
   onContourFrame,
   rowHeight,
+  resetVersion,
   sampleScale,
+  showModel,
   textBox,
 }: FeaturedSceneCanvasProps) {
+  const [isInteracting, setIsInteracting] = useState(false);
+
   return (
     <>
-      <ambientLight intensity={1.15} />
+      <CameraReset cameraPreset={cameraPreset} resetVersion={resetVersion} />
+      <ambientLight intensity={1.05} />
       <directionalLight
-        castShadow
-        intensity={2.3}
+        intensity={1.7}
         position={[5, 8, 6]}
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
       />
       <spotLight
         color={accentColor}
-        intensity={24}
+        intensity={16}
         angle={0.32}
         penumbra={0.8}
         position={[-3, 4, 3]}
       />
-      <Suspense fallback={null}>
-        <DemoModel accentColor={accentColor} modelSrc={modelSrc} />
-      </Suspense>
+      {showModel ? (
+        <Suspense fallback={null}>
+          <DemoModel accentColor={accentColor} modelSrc={modelSrc} />
+        </Suspense>
+      ) : null}
       <OrbitControls
+        key={resetVersion}
+        dampingFactor={0.08}
         enablePan={false}
         enableZoom
+        enableDamping
         makeDefault
+        onStart={() => setIsInteracting(true)}
+        onEnd={() => setIsInteracting(false)}
         minDistance={cameraPreset.minDistance}
         maxDistance={cameraPreset.maxDistance}
         minPolarAngle={cameraPreset.minPolarAngle}
@@ -131,10 +182,11 @@ function SceneContents({
         }}
       />
       <ContourSampler
-        enabled={enableSampling}
+        enabled={enableSampling && showModel}
         onFrame={onContourFrame}
         rowHeight={rowHeight}
-        sampleScale={sampleScale}
+        sampleIntervalMs={isInteracting ? 320 : 140}
+        sampleScale={isInteracting ? Math.max(0.18, sampleScale * 0.58) : sampleScale}
         textBox={textBox}
       />
     </>
@@ -172,22 +224,25 @@ export function FeaturedSceneCanvas(props: FeaturedSceneCanvasProps) {
   }
 
   return (
-    <SceneErrorBoundary fallback={<CanvasFallback message="3D 模型加载失败，文字演示仍可继续阅读。" />}>
+    <SceneErrorBoundary
+      fallback={<CanvasFallback message="3D 模型加载失败，文字演示仍可继续阅读。" />}
+      sceneKey={`${props.modelSrc}-${props.showModel}`}
+    >
       <Canvas
         camera={{
-          fov: 32,
+          fov: 36,
           near: 0.1,
           far: 100,
           position: props.cameraPreset.initialPosition,
         }}
         className="absolute inset-0 h-full w-full touch-none"
-        dpr={[1, 1.5]}
+        dpr={[1, 1.2]}
+        frameloop="demand"
         gl={{
           antialias: true,
           alpha: true,
           powerPreference: "high-performance",
         }}
-        shadows
       >
         <SceneContents {...props} />
       </Canvas>
@@ -195,4 +250,6 @@ export function FeaturedSceneCanvas(props: FeaturedSceneCanvasProps) {
   );
 }
 
-useGLTF.preload("/models/shuilanlan.glb");
+FEATURED_MODEL_SRCS.forEach((modelSrc) => {
+  useGLTF.preload(modelSrc);
+});
