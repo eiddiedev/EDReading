@@ -6,6 +6,7 @@
 import { Sidebar } from "@/components/Navigation/Sidebar";
 import { BottomTab } from "@/components/Navigation/BottomTab";
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAppStore } from "@/lib/store";
 import { GlobalAnnouncement } from "@/components/GlobalAnnouncement";
@@ -13,6 +14,8 @@ import { GlobalAnnouncement } from "@/components/GlobalAnnouncement";
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const ensureDailyUsage = useAppStore((state) => state.ensureDailyUsage);
   const ensureDeviceId = useAppStore((state) => state.ensureDeviceId);
+  const pathname = usePathname();
+  const isFeaturedArticle = /^\/featured\/[^/]+$/.test(pathname);
 
   useEffect(() => {
     ensureDailyUsage();
@@ -29,13 +32,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [ensureDailyUsage, ensureDeviceId]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      <Sidebar />
-      <div className="md:ml-64 pb-20 md:pb-0">
-        <GlobalAnnouncement />
+    <div className={isFeaturedArticle ? "min-h-screen bg-black" : "min-h-screen bg-slate-50 dark:bg-slate-900"}>
+      {!isFeaturedArticle ? <Sidebar /> : null}
+      <div className={isFeaturedArticle ? "" : "md:ml-64 pb-20 md:pb-0"}>
+        {!isFeaturedArticle ? <GlobalAnnouncement /> : null}
         {children}
       </div>
-      <BottomTab />
+      {!isFeaturedArticle ? <BottomTab /> : null}
     </div>
   );
 }

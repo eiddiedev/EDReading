@@ -1,8 +1,8 @@
 /**
- * 应用的首页重定向逻辑，将用户引导至 /library 页面。
+ * 应用首页重定向到精选文章页。
  */
 import { redirect } from "next/navigation";
 
 export default function Home() {
-  redirect("/library");
+  redirect("/featured");
 }
