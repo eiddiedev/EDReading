@@ -13,4 +13,4 @@ Expected filenames:
 - `alhambra.glb`
 - `chichen-itza.glb`
 
-If you want different filenames, update the matching `modelSrc` values in `lib/featured/demo-content.ts`.
+If you want different filenames, update the matching `modelSrc` values in `features/featured/demo-content.ts`.

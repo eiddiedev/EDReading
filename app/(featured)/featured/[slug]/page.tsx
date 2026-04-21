@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { FeaturedDemoPage } from "@/components/featured/FeaturedDemoPage";
-import { FEATURED_DEMO_ARTICLES, getFeaturedArticleBySlug } from "@/lib/featured/demo-content";
+import { FeaturedArticleExperience } from "@/features/featured/article/FeaturedArticleExperience";
+import { FEATURED_DEMO_ARTICLES, getFeaturedArticleBySlug } from "@/features/featured/content";
 
 export function generateStaticParams() {
   return FEATURED_DEMO_ARTICLES.map((article) => ({
@@ -20,5 +20,5 @@ export default async function FeaturedArticlePage({
     notFound();
   }
 
-  return <FeaturedDemoPage article={article} />;
+  return <FeaturedArticleExperience article={article} />;
 }

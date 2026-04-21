@@ -26,6 +26,12 @@ Thumbs.db
 *.pem
 repomix-output.xml
 
+# local 3D model assets
+*.glb
+*.gltf
+*.fbx
+*.obj
+
 # debug / logs
 logs
 *.log
