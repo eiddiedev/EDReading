@@ -69,7 +69,7 @@ public/                     # 静态资源
 
 ### 环境要求
 
-- Node.js 18+
+- Node.js 20.19+
 - Supabase 项目（用于鉴权与数据库）
 - 可选 AI Key（OpenAI 或 DeepSeek，未配置将使用本地兜底）
 
@@ -134,6 +134,8 @@ npm start
 - `npm run build`：构建生产包
 - `npm start`：启动生产服务
 - `npm run lint`：运行 ESLint（构建阶段忽略错误）
+- `npm audit`：检查完整依赖树的安全漏洞
+- `npm audit --omit=dev`：仅检查生产依赖的安全漏洞
 
 ## 故障排除 (Troubleshooting)
 
@@ -183,6 +185,9 @@ npm start
 - 严禁在客户端暴露服务端密钥（如 Service Role Key）。
 - 服务端 Route Handlers 中读取服务端专用变量，避免泄露。
 - 未配置 AI Key 时，应用仍可运行但 AI 能力受限。
+- 发布或升级依赖前运行 `npm audit` 和 `npm audit --omit=dev`。
+- 优先使用 `npm audit fix`、补丁升级和精确 `overrides` 修复安全问题；不要直接使用 `npm audit fix --force`，特别是 EPUB 阅读器链路（`react-reader` / `epubjs`）可能涉及破坏性升级。
+- 依赖升级后至少运行 `npm run lint` 与 `npm run build`，确认类型检查和生产构建仍然通过。
 
 ## 贡献与反馈
 

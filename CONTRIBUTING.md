@@ -3,7 +3,7 @@
 ## 快速开始
 
 ### 前置要求
-- Node.js (推荐最新的 LTS 版本)
+- Node.js 20.19+（推荐最新的 LTS 版本）
 - npm
 
 ### 安装
@@ -34,6 +34,11 @@ npm run dev
 - **命名**: 组件使用 PascalCase（大驼峰），函数/变量使用 camelCase（小驼峰）。
 - **提交信息**: 使用语义化提交消息（例如：`feat: add vocabulary review`, `fix: header layout`）。
 - **格式化**: 代码应保持格式化（已配置 Prettier/ESLint）。
+
+## 依赖安全
+- 提交依赖变更前运行 `npm audit` 和 `npm audit --omit=dev`。
+- 优先使用非破坏性的 `npm audit fix`、补丁升级或 `overrides`；避免直接运行 `npm audit fix --force`。
+- 修改依赖后运行 `npm run lint` 与 `npm run build`。
 
 ## 部署
 本项目设计为部署在 Vercel 或任何兼容 Next.js 的托管平台上。
