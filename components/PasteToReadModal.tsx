@@ -17,6 +17,7 @@ import { Article } from "@/types";
 import { toast } from "sonner";
 import { readStreamedJson } from "@/lib/stream-client";
 import { getArticlePreview } from "@/lib/stream-preview";
+import { READING_LEVELS } from "@/lib/reading-levels";
 
 interface PasteToReadModalProps {
   isOpen: boolean;
@@ -31,13 +32,6 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [streamPreview, setStreamPreview] = useState("");
   
-  const difficultyOptions = [
-    { value: "CET-4", label: "大学四级 (CET-4)" },
-    { value: "CET-6", label: "大学六级 (CET-6)" },
-    { value: "PG-Entrance", label: "考研英语" },
-    { value: "IELTS", label: "雅思 (IELTS)" },
-    { value: "TOEFL", label: "托福 (TOEFL)" },
-  ];
   const { addArticle, dailyUsage, ensureDailyUsage, checkImportQuota, isAdmin } = useAppStore((state) => ({
     addArticle: state.addArticle,
     dailyUsage: state.dailyUsage,
@@ -189,9 +183,9 @@ export function PasteToReadModal({ isOpen, onClose, onSuccess }: PasteToReadModa
               disabled={isAnalyzing}
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
             >
-              {difficultyOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              {READING_LEVELS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.selectLabel}
                 </option>
               ))}
             </select>

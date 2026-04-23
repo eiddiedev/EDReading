@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Article } from "@/types";
 import { BookOpen, Trash2, Check, GraduationCap, Plus } from "lucide-react";
 import { triggerHaptic } from "@/lib/utils";
+import { findReadingLevel } from "@/lib/reading-levels";
 
 interface ArticleCardProps {
   article: Article;
@@ -21,6 +22,8 @@ interface ArticleCardProps {
 // --- 核心升级：适配新的等级系统 ---
 const difficultyColors: Record<string, string> = {
   // 新等级配色
+  'zk': "bg-lime-100 dark:bg-lime-900/30 text-lime-700 dark:text-lime-300",
+  'gk': "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
   'CET-4': "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
   'CET-6': "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
   'PG-Entrance': "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400",
@@ -34,6 +37,8 @@ const difficultyColors: Record<string, string> = {
 };
 
 const difficultyLabels: Record<string, string> = {
+  'zk': "中考",
+  'gk': "高考",
   'CET-4': "四级",
   'CET-6': "六级",
   'PG-Entrance': "考研",
@@ -46,8 +51,10 @@ const difficultyLabels: Record<string, string> = {
 
 export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggleRead, onAdd, onClick }: ArticleCardProps) {
   // 如果数据库里的 difficulty 是新标签，就用新的颜色；否则用默认紫
-  const difficultyColor = difficultyColors[article.difficulty] || "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400";
-  const difficultyLabel = difficultyLabels[article.difficulty] || article.difficulty;
+  const normalizedLevel = findReadingLevel(article.difficulty);
+  const difficultyKey = normalizedLevel?.id || article.difficulty;
+  const difficultyColor = difficultyColors[difficultyKey] || "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400";
+  const difficultyLabel = normalizedLevel?.shortLabel || difficultyLabels[article.difficulty] || article.difficulty;
 
   // 智能标题逻辑 (保持不变)
   const isTitleZh = /[\u4e00-\u9fa5]/.test(article.title);

@@ -18,6 +18,7 @@ import { useArticles } from "@/hooks/useArticles";
 import { InView } from "react-intersection-observer";
 import { readStreamedJson } from "@/lib/stream-client";
 import { getArticlePreview } from "@/lib/stream-preview";
+import { READING_LEVELS, getReadingLevelMatchValues } from "@/lib/reading-levels";
 
 export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState<"mine" | "discover">("mine");
@@ -78,14 +79,6 @@ export default function LibraryPage() {
 
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
 
-  const FILTER_OPTIONS = [
-    { id: 'CET-4', label: '四级' },
-    { id: 'CET-6', label: '六级' },
-    { id: 'PG-Entrance', label: '考研' },
-    { id: 'IELTS', label: '雅思' },
-    { id: 'TOEFL', label: '托福' },
-  ];
-
   // Use pagedArticles for display instead of store.articles when in 'mine' tab
   // But we must also include local-only articles that haven't been synced or are offline
   const displayArticles = useMemo(() => {
@@ -102,10 +95,13 @@ export default function LibraryPage() {
 
     // Apply Level Filter
     if (selectedLevel) {
+      const selectedLevelValues = getReadingLevelMatchValues(selectedLevel);
       result = result.filter(a => 
-        a.difficulty === selectedLevel || 
-        a.level === selectedLevel || 
-        a.tags?.includes(selectedLevel)
+        selectedLevelValues.some((value) =>
+          a.difficulty === value ||
+          a.level === value ||
+          a.tags?.includes(value)
+        )
       );
     }
 
@@ -506,7 +502,7 @@ export default function LibraryPage() {
         >
           全部
         </button>
-        {FILTER_OPTIONS.map((opt) => (
+        {READING_LEVELS.map((opt) => (
           <button
             key={opt.id}
             onClick={() => setSelectedLevel(opt.id === selectedLevel ? null : opt.id)}
@@ -516,7 +512,7 @@ export default function LibraryPage() {
                 : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700"
             }`}
           >
-            {opt.label}
+            {opt.shortLabel}
           </button>
         ))}
       </div>
