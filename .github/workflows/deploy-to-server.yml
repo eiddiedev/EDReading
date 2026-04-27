@@ -69,6 +69,7 @@ jobs:
             --exclude ".env.local" \
             --exclude ".env.production" \
             --exclude ".vercel" \
+            --exclude "public/models" \
             --exclude ".qoder" \
             --exclude ".trae" \
             --exclude ".codex" \
