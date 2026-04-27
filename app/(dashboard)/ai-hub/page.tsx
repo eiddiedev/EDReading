@@ -14,8 +14,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { readStreamedJson } from "@/lib/stream-client";
 import { getArticlePreview } from "@/lib/stream-preview";
+import { READING_LEVELS, findReadingLevel } from "@/lib/reading-levels";
 
 const difficultyColors: Record<string, string> = {
+  'zk': "bg-lime-50 text-lime-600 border-lime-200 dark:bg-lime-900/20 dark:text-lime-300 dark:border-lime-800",
+  'gk': "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
   'CET-4': "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800",
   'CET-6': "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800",
   'PG-Entrance': "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800",
@@ -26,6 +29,12 @@ const difficultyColors: Record<string, string> = {
   'Advanced': "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
   'General': "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
 };
+
+const getDifficultyLabel = (difficulty: string) =>
+  findReadingLevel(difficulty)?.shortLabel || difficulty;
+
+const getDifficultyColor = (difficulty: string) =>
+  difficultyColors[findReadingLevel(difficulty)?.id || difficulty] || difficultyColors["General"];
 
 const tagColorPalette = [
   "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300",
@@ -51,6 +60,7 @@ export default function AIHubPage() {
   const [activeTab, setActiveTab] = useState<"import" | "discovery" | "chat">("discovery");
 
   const [inputContent, setInputContent] = useState("");
+  const [analysisLevel, setAnalysisLevel] = useState("IELTS");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AIProcessResult | null>(null);
   const [analysisPreview, setAnalysisPreview] = useState("");
@@ -156,7 +166,7 @@ export default function AIHubPage() {
     }
 
     // 1. Check Local Cache
-    const cacheKey = `ai_cache_${getHash(trimmedInput)}`;
+    const cacheKey = `ai_cache_${analysisLevel}_${getHash(trimmedInput)}`;
     const cachedData = localStorage.getItem(cacheKey);
     if (cachedData) {
         try {
@@ -187,7 +197,7 @@ export default function AIHubPage() {
         body: JSON.stringify({
           text: trimmedInput,
           userId: user.id,
-          level: "IELTS"
+          level: analysisLevel
         })
       });
 
@@ -414,8 +424,8 @@ export default function AIHubPage() {
                             <div key={i} className="group bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex flex-col">
                                 <div className="flex items-start justify-between mb-3 gap-2">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${difficultyColors[item.difficulty || "General"] || difficultyColors["General"]}`}>
-                                            {item.difficulty || "General"}
+                                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getDifficultyColor(item.difficulty || "General")}`}>
+                                            {getDifficultyLabel(item.difficulty || "General")}
                                         </span>
                                         {item.tags?.[0] && (
                                             <span className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${getTagColor(item.tags[0])}`}>
@@ -478,23 +488,37 @@ export default function AIHubPage() {
                             <div className="text-sm text-slate-500">
                                 {isAdmin ? "管理员模式 🚀" : `今日剩余：${remainingImport} / 5`}
                             </div>
-                            <button
-                                onClick={handleAnalyze}
-                                disabled={isAnalyzing || !inputContent.trim() || wordCount > 3000 || (!isAdmin && remainingImport <= 0)}
-                                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 dark:shadow-none"
-                            >
-                                {isAnalyzing ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        AI 分析中...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles className="w-4 h-4" />
-                                        深度分析
-                                    </>
-                                )}
-                            </button>
+                            <div className="flex flex-wrap justify-end gap-2">
+                                <select
+                                    value={analysisLevel}
+                                    onChange={(e) => setAnalysisLevel(e.target.value)}
+                                    disabled={isAnalyzing}
+                                    className="px-3 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                >
+                                    {READING_LEVELS.map((level) => (
+                                        <option key={level.id} value={level.id}>
+                                            {level.selectLabel}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    onClick={handleAnalyze}
+                                    disabled={isAnalyzing || !inputContent.trim() || wordCount > 3000 || (!isAdmin && remainingImport <= 0)}
+                                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 dark:shadow-none"
+                                >
+                                    {isAnalyzing ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            AI 分析中...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-4 h-4" />
+                                            深度分析
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                         {result && (
                             <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl p-6 border shadow-sm">

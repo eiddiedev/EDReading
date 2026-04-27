@@ -6,6 +6,7 @@ import { checkContentSafety } from "@/lib/safety";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { formatQualityRules, getReadingLevel, normalizeReadingLevelId } from "@/lib/reading-levels";
 
 export const runtime = 'edge';
 
@@ -46,7 +47,9 @@ async function getSHA256Hash(message: string) {
 export async function POST(req: Request) {
   try {
     const supabase = createAdminClient();
-    const { text, userId, level = "IELTS", topicId } = await req.json();
+    const { text, userId, level: rawLevel = "IELTS" } = await req.json();
+    const level = normalizeReadingLevelId(rawLevel);
+    const levelConfig = getReadingLevel(level);
 
     if (!text || !userId) {
       return NextResponse.json({ error: "Missing text or userId" }, { status: 400 });
@@ -56,7 +59,7 @@ export async function POST(req: Request) {
     const normalizedText = truncateToWords(slicedText, 3500);
 
     // ⚡ 0. 缓存策略 (Cache Reuse)
-    const contentHash = await getSHA256Hash(normalizedText);
+    const contentHash = await getSHA256Hash(`${normalizedText}|${level}`);
     
     // 检查数据库中是否已存在相同内容的已分析文章
     const { data: cachedArticle } = await supabase
@@ -108,37 +111,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "API Key is missing" }, { status: 500 });
     }
 
-    const levelGuide: Record<string, string> = {
-      "CET-4": "Sentence length 15-20 words. Vocab: common 4000 words. Use formal but accessible exam tone.",
-      "CET-6": "Formal exam tone with tighter logic. Vocab: common 6000 words.",
-      "IELTS": "Varied sentence lengths, heavy paraphrasing, academic and objective tone.",
-      "TOEFL": "Academic lecture style with dense discipline-specific terms.",
-      "PG-Entrance": "High-density logic and long complex sentences."
-    };
-
-    const lengthGuide: Record<string, string> = {
-      "CET-4": "300-500",
-      "CET-6": "300-500",
-      "IELTS": "700-1000",
-      "TOEFL": "700-1000",
-      "PG-Entrance": "700-1000",
-    };
-
     const mandatoryKeywords = "None"; 
+    const qualityRules = formatQualityRules(levelConfig);
 
-    const systemPrompt = `You are an expert IELTS/TOEFL exam passage writer and reviewer.
-    **Reference Level:** ${level}
-    **Level Guide:** ${levelGuide[level] || levelGuide.IELTS}
-    **Length Limit:** ${lengthGuide[level] || lengthGuide.IELTS} words
-    **Academic Constraints:** Formal exam tone, no conversational phrases (e.g., "I think"). Use complex logical connectors.
+    const systemPrompt = `You are an expert English exam passage writer and reviewer.
+    **Reference Level:** ${levelConfig.label} (${level})
+    **Level Guide:** ${levelConfig.importGuide}
+    **Length Limit:** ${levelConfig.lengthRange} words
+    **Quality Bar:**
+    ${qualityRules}
+    **Exam Constraints:** Keep tone, vocabulary, grammar, and logic suitable for the selected exam. Do not turn Zhongkao/Gaokao text into IELTS/TOEFL academic prose.
     **Mandatory Keywords:** ${mandatoryKeywords}
     If the input text violates style or length constraints, rewrite it to comply before analyzing.
+    The "level" field must be exactly "${level}".
     Output JSON format:
     {
       "title": "English Title",
       "title_zh": "Chinese Title",
       "summary": "One sentence summary",
-      "level": "CEFR Level (A1-C2)",
+      "level": "${level}",
       "tags": ["tag1", "tag2"],
       "vocabulary": [ {"word": "example", "definition": "...", "translation": "..."} ],
       "phrases": ["phrase 1", "phrase 2"],
@@ -172,6 +163,10 @@ export async function POST(req: Request) {
     return streamOpenAIResponse({
       upstream: response,
       parse: (raw) => parseJsonCompletion<any>(raw),
+      onDone: (result) => ({
+        ...result,
+        level,
+      }),
     });
 
   } catch (error: any) {

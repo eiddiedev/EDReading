@@ -6,6 +6,7 @@ import type { VocabularyCategory, VocabularyDatabase } from "@/types";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { formatQualityRules, getReadingLevel, normalizeReadingLevelId } from "@/lib/reading-levels";
 
 const VOCAB_DB = IELTS_VOCAB_DB as VocabularyDatabase;
 
@@ -65,7 +66,9 @@ const truncateToWords = (input: string, limit: number) => {
 export async function POST(request: Request) {
   try {
     const supabase = createAdminClient();
-    const { text, userId, level = "IELTS", topicId, userTitle } = await request.json();
+    const { text, userId, level: rawLevel = "IELTS", topicId, userTitle } = await request.json();
+    const level = normalizeReadingLevelId(rawLevel);
+    const levelConfig = getReadingLevel(level);
 
     if (!text || !userId) {
       return NextResponse.json({ error: "Missing text or userId" }, { status: 400 });
@@ -73,7 +76,7 @@ export async function POST(request: Request) {
 
     const slicedText = String(text).slice(0, 3500);
     const normalizedText = truncateToWords(slicedText, 3500);
-    const hashInput = userTitle ? `${normalizedText}|${userTitle}` : normalizedText;
+    const hashInput = userTitle ? `${normalizedText}|${level}|${userTitle}` : `${normalizedText}|${level}`;
     const contentHash = crypto.createHash("sha256").update(hashInput).digest("hex");
 
     const { data: cachedArticle } = await supabase
@@ -125,16 +128,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "API Key is missing" }, { status: 500 });
     }
 
-    const levelGuide: Record<string, string> = {
-      "CET-4": "Sentence length 15-20 words. Vocab: common 4000 words. Use formal but accessible exam tone.",
-      "CET-6": "Formal exam tone with tighter logic. Vocab: common 6000 words.",
-      "IELTS": "Varied sentence lengths, heavy paraphrasing, academic and objective tone.",
-      "TOEFL": "Academic lecture style with dense discipline-specific terms.",
-      "PG-Entrance": "High-density logic and long complex sentences.",
-    };
-
     const wasTruncated = String(text).length > 3500 || countWords(String(text)) > 3500;
-    const mandatoryKeywords = pickMandatoryKeywords(topicId, 10);
+    const mandatoryKeywords = levelConfig.mandatoryKeywordCount > 0
+      ? pickMandatoryKeywords(topicId, levelConfig.mandatoryKeywordCount)
+      : [];
+    const qualityRules = formatQualityRules(levelConfig);
     const titleInstruction = userTitle
       ? `CRITICAL: The user has explicitly provided the title: "${userTitle}". You MUST use this EXACT string for the "title" field. For "title_zh", provide a direct Simplified Chinese translation of "${userTitle}". Do NOT generate a new title.`
       : `Auto-generate a short, engaging English title for "title", and its Simplified Chinese translation for "title_zh".`;
@@ -149,22 +147,25 @@ Your goal is to prepare raw text for a reading app.
 2. **Remove Ads/Meta:** Remove "Subscribe", "Read more", URLs, navigation text, and footer content.
 3. **Fix Formatting:** Ensure proper paragraph spacing and remove excessive line breaks.
 
-**Reference Level:** ${level}
-**Level Guide:** ${levelGuide[level] || levelGuide.IELTS}
-**Academic Constraints:** Formal exam tone.
+**Reference Level:** ${levelConfig.label} (${level})
+**Level Guide:** ${levelConfig.importGuide}
+**Quality Bar:**
+${qualityRules}
+**Exam Constraints:** Keep the cleaned text suitable for the selected exam level. Do not upgrade Zhongkao/Gaokao text into IELTS-style academic prose.
 **Mandatory Keywords:** ${mandatoryKeywords.length > 0 ? mandatoryKeywords.join(", ") : "None"}
 ${titleInstruction}
 
 **Optimization Mode:**
 - Do NOT generate vocabulary lists, phrases, or sentence analysis yet.
 - ONLY return: title, cleaned content, level, tags.
+- The "level" field must be exactly "${level}".
 
 Output JSON format:
 {
   "title": "English Title",
   "title_zh": "Chinese Title",
   "summary": "One sentence summary",
-  "level": "CEFR Level (A1-C2)",
+  "level": "${level}",
   "tags": ["tag1", "tag2"],
   "content": "The cleaned and processed text content..."
 }`;
@@ -207,7 +208,8 @@ Output JSON format:
             title: result.title,
             title_zh: result.title_zh,
             content: finalContent,
-            difficulty: result.level || "Intermediate",
+            difficulty: level,
+            level,
             tags: finalTags,
             is_public: false,
             word_count: contentWordCount,
@@ -225,7 +227,7 @@ Output JSON format:
           title: result.title,
           title_zh: result.title_zh,
           content: finalContent,
-          level: result.level,
+          level,
           phrases: [],
           vocabulary: [],
           sentences: [],

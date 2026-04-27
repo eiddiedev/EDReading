@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { X, Sparkles, BarChart3, GraduationCap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppStore } from "@/lib/store";
+import { READING_LEVELS } from "@/lib/reading-levels";
 
 export const IELTS_TOPICS = [
   { id: 'tech', label: '🤖 科技与未来 (Technology)', prompt: 'Technology, AI, or Digital Privacy' },
@@ -21,14 +22,6 @@ export const IELTS_TOPICS = [
   { id: 'soc', label: '👥 社会与生活 (Society)', prompt: 'Urbanization, Work-Life Balance, or Globalization' },
   { id: 'cul', label: '🎨 文化与艺术 (Culture)', prompt: 'Traditional Culture, Art, or Languages' },
   { id: 'rnd', label: '🎲 随便来一个 (Surprise Me)', prompt: 'Random' }
-];
-
-const LEVEL_OPTIONS = [
-  { id: 'CET-4', label: '大学四级', desc: 'CET-4 (Basic)' },
-  { id: 'CET-6', label: '大学六级', desc: 'CET-6 (Advanced)' },
-  { id: 'PG-Entrance', label: '考研英语', desc: 'Postgrad (Hard)' },
-  { id: 'IELTS', label: '雅思学术', desc: 'IELTS (Band 7+)' },
-  { id: 'TOEFL', label: '托福阅读', desc: 'TOEFL (Academic)' }
 ];
 
 interface TopicSelectionModalProps {
@@ -91,7 +84,7 @@ export function TopicSelectionModal({ isOpen, onClose, onSelect, isGenerating }:
                 选择目标等级 (Target Level)
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {LEVEL_OPTIONS.map((opt) => (
+                {READING_LEVELS.map((opt) => (
                   <button
                     type="button"
                     key={opt.id}

@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { checkContentSafety } from '@/lib/safety';
 import { shuffle, flattenWords, pickMandatoryKeywords, TOPIC_VOCAB_LABELS } from '@/lib/vocab-utils';
 import { parseJsonCompletion, streamOpenAIResponse } from '@/lib/ai-stream';
+import { formatQualityRules, getReadingLevel, normalizeReadingLevelId } from '@/lib/reading-levels';
 
 // --- 配置区域 ---
 
@@ -50,12 +51,45 @@ const TOPIC_ANGLES: Record<string, string[]> = {
   ]
 };
 
-const LEVEL_CONFIG: Record<string, string> = {
-  'CET-4': 'Level: University English Band 4 (China). Sentence length: 15-20 words. Vocab: common 4000 words. Style: clear, structured.',
-  'CET-6': 'Level: University English Band 6 (China). Style: formal, argumentative, nuanced.',
-  'IELTS': 'Level: IELTS Academic Band 7+. Sentence length: varied (short + long). Use heavy paraphrasing. Style: academic, objective.',
-  'TOEFL': 'Level: TOEFL iBT. Context: academic lecture. Increase discipline-specific terminology density.',
-  'PG-Entrance': 'Level: Chinese Postgraduate Entrance Exam (Kaoyan). Focus: long complex sentences and precise logic.'
+const VOCAB_DB = IELTS_VOCAB_DB as VocabularyDatabase;
+
+const TOPIC_VOCAB_LABELS: Record<string, string[]> = {
+  env: ['自然地理', '植物研究', '动物保护'],
+  tech: ['科技发明', '太空探索'],
+  edu: ['学校教育'],
+  soc: ['文化历史', '物品材料'],
+  cul: ['文化历史', '语言演化', '娱乐运动', '时尚潮流']
+};
+
+const shuffle = <T,>(items: T[]) => {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
+const flattenWords = (category: VocabularyCategory) =>
+  category.words.flat().map((entry) => entry.word).filter(Boolean);
+
+const pickMandatoryKeywords = (topicId: string, count = 10) => {
+  const labels = TOPIC_VOCAB_LABELS[topicId] || [];
+  const availableLabels = labels.filter((label) => Boolean(VOCAB_DB[label]));
+  const fallbackLabels = Object.keys(VOCAB_DB);
+  const targetLabels = availableLabels.length > 0 ? availableLabels : fallbackLabels;
+  const words = targetLabels.flatMap((label) => {
+    const category = VOCAB_DB[label];
+    return category ? flattenWords(category) : [];
+  });
+  const seen = new Set<string>();
+  const unique = words.filter((word) => {
+    const key = word.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return shuffle(unique).slice(0, count);
 };
 
 /**
@@ -82,6 +116,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     let { topicPrompt, topicId, level = 'IELTS', userId } = body;
+    level = normalizeReadingLevelId(level);
+    const levelConfig = getReadingLevel(level);
     if (!userId) {
       return NextResponse.json({ error: "未登录，无法生成公共文章。" }, { status: 401 });
     }
@@ -108,9 +144,6 @@ export async function POST(req: Request) {
       specificTopic = `${randomAngle} (Broad Topic: ${topicPrompt})`;
     }
 
-    // 默认回退
-    if (!LEVEL_CONFIG[level]) level = 'IELTS';
-    
     // --- 3. 查缓存 (Cache First) ---
     // Key 变了 (specificTopic)，所以用户不会再刷到重复的旧文了
     const { data: cachedArticle } = await supabase
@@ -127,25 +160,32 @@ export async function POST(req: Request) {
     }
 
     // --- 4. 生成新文章 (Calling AI) ---
-    const levelGuide = LEVEL_CONFIG[level];
-    const mandatoryKeywords = pickMandatoryKeywords(topicId || "", 10);
-    const targetLength = level === "IELTS" ? "700-1000" : "350-500";
+    const mandatoryKeywords = levelConfig.mandatoryKeywordCount > 0
+      ? pickMandatoryKeywords(topicId || "", levelConfig.mandatoryKeywordCount)
+      : [];
+    const targetLength = levelConfig.lengthRange;
+    const qualityRules = formatQualityRules(levelConfig);
     
     const systemPrompt = `You are an Expert English Exam Content Creator.
     **Task:** Write a reading passage based on the topic provided.
     **Topic:** "${specificTopic}"
-    **Target Level:** ${level}
-    **Style Guide:** ${levelGuide}
+    **Target Level:** ${levelConfig.label} (${level})
+    **Style Guide:** ${levelConfig.generationGuide}
+    **Target Length:** ${targetLength} words
 
     **Mandatory Keywords:** ${mandatoryKeywords.length > 0 ? mandatoryKeywords.join(", ") : "None"}
 
     **Strict Requirements:**
     1. **Format:** JSON only. NO markdown.
     2. **Length:** ${targetLength} words.
-    3. **Content:** Academic, neutral, and educational. Avoid controversial politics.
-    4. **Variety:** Use a mix of passive voice, inversions, and participial phrases suitable for the level.
-    5. **Mandatory Keywords:** Use every keyword naturally in context, and build key test-style sentences around them.
-    6. **Self-Check:** After writing, verify the article meets academic reading standards. If tone is too childish or logic is broken, rewrite before outputting the final JSON.
+    3. **Content:** Neutral, educational, and exam-appropriate for the selected level. Avoid controversial politics.
+    4. **Level Fit:** Follow the target level exactly. Do not make Zhongkao/Gaokao passages sound like IELTS/TOEFL academic writing.
+    5. **Variety:** Use grammar patterns suitable for the level; avoid overcomplicating lower-level passages.
+    6. **Mandatory Keywords:** If keywords are provided, use every keyword naturally in context and build key test-style sentences around them.
+    7. **Self-Check:** Before output, verify the passage meets the level-specific quality bar below. If tone, vocabulary, logic, or length is off-level, rewrite first.
+
+    **Level-Specific Quality Bar:**
+    ${qualityRules}
 
     **Output JSON Structure:**
     {
@@ -153,6 +193,7 @@ export async function POST(req: Request) {
       "title_zh": "Simplified Chinese Title",
       "content": "Full article text with paragraph breaks...",
       "difficulty": "${level}",
+      "level": "${level}",
       "tags": ["Tag1", "Tag2"],
       "vocabulary": [
         { "word": "word1", "phonetic": "/.../", "definition": "Chinese def", "example": "Sentence from text." }
@@ -209,6 +250,11 @@ export async function POST(req: Request) {
           user_id: userId,
           is_public: true,
         };
+        const normalizedAiResult = {
+          ...aiResult,
+          difficulty: level,
+          level,
+        };
 
         let savedArticle = null;
         try {
@@ -224,10 +270,10 @@ export async function POST(req: Request) {
         }
 
         if (savedArticle) {
-          return { ...savedArticle, ...aiResult };
+          return { ...savedArticle, ...normalizedAiResult };
         }
 
-        return { ...finalArticleData, ...aiResult };
+        return { ...finalArticleData, ...normalizedAiResult };
       },
     });
 

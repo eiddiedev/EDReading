@@ -56,13 +56,13 @@ export interface Article {
     answer: string;
   }[];
   topic?: string;
-  tags?: string[];
-  coverImage?: string;
-  isRead?: boolean;
-  level?: string;
-  is_public?: boolean;
-  userId?: string;
-  user_id?: string;
+  tags?: string[]; // 已添加标签支持
+  coverImage?: string; // 封面图片 URL
+  isRead?: boolean; // 追踪阅读进度
+  level?: string; // 已添加等级支持 (中考, 高考, CET4, CET6, IELTS, TOEFL)
+  is_public?: boolean; // 已添加公开分享支持
+  userId?: string; // 本地缓存中可能保留 camelCase 所有者字段
+  user_id?: string; // Supabase 记录和旧缓存中的 snake_case 所有者字段
   is_local_only?: boolean;
   isGenerating?: boolean;
 }
