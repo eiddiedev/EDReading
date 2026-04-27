@@ -29,4 +29,8 @@ export interface FeaturedDemoConfig {
     surface: string;
   };
   cameraPreset: FeaturedCameraPreset;
+  sceneTuning?: {
+    scale?: number;
+    modelYaw?: number;
+  };
 }

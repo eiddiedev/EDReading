@@ -9,7 +9,7 @@
  * 2. 调用字典 API 获取基础释义。
  * 3. 弹窗展示结果，关闭即销毁。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { X, Plus, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
@@ -27,7 +27,7 @@ interface SimpleDictionaryModalProps {
   onAddToNotebook: (word: DictionaryResult) => void;
 }
 
-export function SimpleDictionaryModal({
+export const SimpleDictionaryModal = memo(function SimpleDictionaryModal({
   result,
   isLoading = false,
   isRemoteLoading = false,
@@ -290,4 +290,4 @@ export function SimpleDictionaryModal({
       )}
     </AnimatePresence>
   );
-}
+});

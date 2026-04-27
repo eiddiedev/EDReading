@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import nlp from "compromise";
 import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
 
 // Config (simulate env vars for now if needed, or rely on process.env)
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Local Fallback (Compromise / Rule-based)
-    const result = localFallback(action, text, context);
+    const result = await localFallback(action, text, context);
     return NextResponse.json(result);
 
   } catch (error) {
@@ -117,7 +116,8 @@ Analyze the target word/phrase in the context of the provided sentence.
 }
 
 // --- Local Fallback Implementation ---
-function localFallback(action: string, text: string, context?: string) {
+async function localFallback(action: string, text: string, context?: string) {
+  const { default: nlp } = await import("compromise");
   const doc = nlp(text);
 
   if (action === "extract_phrases") {

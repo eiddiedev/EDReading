@@ -46,10 +46,18 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
   const [fallbackMap, setFallbackMap] = useState<Record<string, ReviewFallbackInfo>>({});
   const fallbackMapRef = useRef<Record<string, ReviewFallbackInfo>>({});
   const inflightFallbacksRef = useRef<Set<string>>(new Set());
+  const playingAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     fallbackMapRef.current = fallbackMap;
   }, [fallbackMap]);
+
+  useEffect(() => {
+    return () => {
+      playingAudioRef.current?.pause();
+      playingAudioRef.current = null;
+    };
+  }, []);
 
   // Initialize Quiz - Only once to prevent list shifting during review
   useEffect(() => {
@@ -74,7 +82,9 @@ export function ReviewSession({ onClose, vocabulary }: ReviewSessionProps) {
       return;
     }
 
+    playingAudioRef.current?.pause();
     const audio = new Audio(pronunciationUrl);
+    playingAudioRef.current = audio;
     audio.play().catch((error) => {
       console.error("Pronunciation playback failed:", error);
       toast.error("发音播放失败，请稍后再试");

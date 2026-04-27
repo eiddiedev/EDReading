@@ -9,7 +9,7 @@
  * 2. 展示音标、释义、例句等信息。
  * 3. 提供添加到生词本的交互，支持状态反馈（加载中、已添加）。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import { Plus, X, Check, Sparkles, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
@@ -32,7 +32,7 @@ interface DictionaryModalProps {
   disableDrag?: boolean;
 }
 
-export function DictionaryModal({
+export const DictionaryModal = memo(function DictionaryModal({
   result,
   localResult = null,
   remoteResult = null,
@@ -49,6 +49,7 @@ export function DictionaryModal({
   const vocabulary = useAppStore((state) => state.vocabulary);
   const [isSaved, setIsSaved] = useState(false);
   const lastAutoPlayedWordRef = useRef<string | null>(null);
+  const playingAudioRef = useRef<HTMLAudioElement | null>(null);
   const dragControls = useDragControls();
   const baseResult = result || localResult || remoteResult;
   const streamResult = getDictionaryPreview(streamText, currentWord || baseResult?.word);
@@ -74,14 +75,26 @@ export function DictionaryModal({
     if (audioUrl && lastAutoPlayedWordRef.current !== autoPlayWord) {
       lastAutoPlayedWordRef.current = autoPlayWord;
       const audio = new Audio(audioUrl);
-      audio.play().catch(() => {
-      });
+      audio.play().catch(() => {});
+      return () => {
+        audio.pause();
+        audio.src = "";
+      };
     }
   }, [audioUrl, autoPlayWord]);
 
+  useEffect(() => {
+    return () => {
+      playingAudioRef.current?.pause();
+      playingAudioRef.current = null;
+    };
+  }, []);
+
   const handlePlayAudio = () => {
     if (audioUrl) {
+      playingAudioRef.current?.pause();
       const audio = new Audio(audioUrl);
+      playingAudioRef.current = audio;
       audio.play().catch(e => console.error("Play failed", e));
     }
   };
@@ -423,4 +436,4 @@ export function DictionaryModal({
       )}
     </AnimatePresence>
   );
-}
+});

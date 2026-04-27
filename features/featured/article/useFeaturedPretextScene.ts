@@ -121,6 +121,8 @@ export function useFeaturedPretextScene({
 
     let modelRoot: THREE.Group | null = null;
     let modelHomePosition = new THREE.Vector3();
+    const modelScaleMultiplier = article.sceneTuning?.scale ?? 1;
+    const baseModelYaw = article.sceneTuning?.modelYaw ?? 0;
     let fitState: { target: THREE.Vector3; baseDistance: number } | null = null;
     let viewportWidth = window.innerWidth;
     let viewportHeight = window.innerHeight;
@@ -155,7 +157,7 @@ export function useFeaturedPretextScene({
       const box = new THREE.Box3().setFromObject(root);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-      const scale = 7.8 / maxDim;
+      const scale = (7.8 / maxDim) * modelScaleMultiplier;
 
       root.scale.setScalar(scale);
       root.updateWorldMatrix(true, true);
@@ -321,11 +323,11 @@ export function useFeaturedPretextScene({
       if (layoutKey === lastLayoutKey) return;
       lastLayoutKey = layoutKey;
 
-      const lines = getLinePlacements(preparedBlocks, mask, viewportWidth, viewportHeight);
-      syncLinePool(lines.length);
+      const { mainLines } = getLinePlacements(preparedBlocks, mask, viewportWidth, viewportHeight);
+      syncLinePool(mainLines.length);
 
-      for (let index = 0; index < lines.length; index += 1) {
-        const line = lines[index];
+      for (let index = 0; index < mainLines.length; index += 1) {
+        const line = mainLines[index];
         const node = linePool[index];
         node.textContent = line.text;
         node.style.left = `${line.x}px`;
@@ -369,7 +371,8 @@ export function useFeaturedPretextScene({
       );
 
       if (modelRoot) {
-        modelRoot.rotation.y = Math.sin(elapsed * 0.56) * IDLE_MOTION.modelYaw * idleWeight;
+        modelRoot.rotation.y =
+          baseModelYaw + Math.sin(elapsed * 0.56) * IDLE_MOTION.modelYaw * idleWeight;
         modelRoot.position.y =
           modelHomePosition.y + Math.sin(elapsed * 0.68 + 0.4) * IDLE_MOTION.modelLift * idleWeight;
       }
@@ -439,7 +442,8 @@ export function useFeaturedPretextScene({
     maskCanvas.width = MASK_SIZE.width;
     maskCanvas.height = MASK_SIZE.height;
 
-    scene.background = new THREE.Color(0x000000);
+    // Keep scene background transparent so CSS stars/nebula show through the canvas
+    visibleRenderer.setClearColor(0x000000, 0);
 
     const hemi = new THREE.HemisphereLight(0xf3e9d3, 0x120f0a, 1.9);
     const key = new THREE.DirectionalLight(0xfff6de, 2.8);

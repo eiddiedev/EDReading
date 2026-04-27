@@ -24,8 +24,15 @@ export function AnalysisModal({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
   const [streamPreview, setStreamPreview] = useState("");
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const [isMobile, setIsMobile] = useState(false);
   const partialResult = getSentenceAnalysisPreview(streamPreview);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const handleAnalyze = useCallback(async () => {
     setIsLoading(true);

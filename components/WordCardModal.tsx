@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, memo } from "react";
 /**
  * 单词卡片模态框组件 (WordCardModal)
  * 作用：展示单个单词的详细复习卡片，支持发音和从生词本移除。
@@ -30,7 +30,7 @@ interface CardGenResult {
   translation: string;
 }
 
-export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps) {
+export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [cardContent, setCardContent] = useState<CardGenResult | null>(null);
   const [streamPreview, setStreamPreview] = useState("");
@@ -309,4 +309,4 @@ export function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps)
       </AnimatePresence>
     </div>
   );
-}
+});

@@ -2,9 +2,9 @@ import type { FeaturedDemoConfig } from "@/features/featured/types";
 
 /**
  * 编辑说明：
- * 1. 文章正文、摘要、标题都集中维护在这里。
- * 2. 每篇文章的 3D 模型路径由 `modelSrc` 指定，对应文件请放到 `public/models/landmarks/`。
- * 3. 你后续只需要替换文案和同名 `.glb` 文件，不需要修改精选模块的页面组件。
+ * 1. 精选文章与 `public/models/landmarks/` 中的实际模型文件保持一一对应。
+ * 2. 每篇文章的 3D 模型路径由 `modelSrc` 指定，模型名可以是拼音或英文。
+ * 3. 如果替换模型文件名，请同步更新这里的 `modelSrc`。
  */
 export const FEATURED_DEMO_ARTICLES: FeaturedDemoConfig[] = [
   {
@@ -12,29 +12,29 @@ export const FEATURED_DEMO_ARTICLES: FeaturedDemoConfig[] = [
     slug: "great-wall-of-china",
     title: "The Great Wall of China",
     titleZh: "中国长城",
-    summary: "A reading feature about scale, defense, and the long human effort embedded in a mountain frontier.",
+    summary: "A reading feature about defense, terrain, and the enormous human effort embedded in a mountain frontier.",
     topic: "Fortification",
     difficulty: "B2",
     estimatedMinutes: 6,
-    body: `The Great Wall is often imagined as a single, uninterrupted line running across northern China. In reality, it is a vast system of walls, passes, watchtowers, and defensive corridors built and rebuilt across many centuries. Its scale is impressive not simply because it is long, but because it adapts to ridges, deserts, valleys, and political needs that changed over time.
+    body: `The Great Wall is often imagined as one endless line, but it is better understood as a system. Walls, passes, watchtowers, and defensive corridors were built and rebuilt over long periods in response to changing political and military needs.
 
-What survives today reflects both military logic and environmental negotiation. Builders worked with the landscape instead of erasing it. On steep mountains, the wall rises in sudden steps. In flatter regions, it spreads more calmly, tying together towers and gates that once controlled movement, warning signals, and supply routes.
+Its architecture gains meaning from the land it crosses. On steep ridges the structure climbs in sharp steps, while in flatter regions it stretches more calmly across open ground. The monument shows how strategy and geography can become inseparable.
 
-The monument also carries a quieter message about labour. Stone, tamped earth, brick, and timber had to be moved, shaped, and assembled under harsh conditions. The wall therefore records not only imperial ambition, but also the endurance of workers whose effort made distant strategy physically real.
+The wall also records labour on an extraordinary scale. Stone, tamped earth, brick, and timber had to be moved and assembled under severe conditions. Imperial ambition survives here only because countless workers made distant plans physically real.
 
-For modern visitors, the Great Wall can feel cinematic from afar and intensely human at close range. Each stair, parapet, and lookout platform brings the body back into the story. The structure becomes easier to understand when it is treated not as an abstract wonder, but as architecture designed for movement, vigilance, and survival.`,
+For modern readers, the Great Wall is useful not only as a symbol of China, but as an example of how infrastructure, landscape, and power can be read together. It feels monumental from afar and deeply human at close range.`,
     keyPoints: [
-      "The Great Wall is a changing system rather than one uniform structure.",
-      "Its form responds directly to terrain and strategic need.",
-      "The site also reveals the human labour behind imperial construction.",
+      "The Great Wall is a changing defensive system rather than one uniform structure.",
+      "Its form responds directly to terrain and military strategy.",
+      "The monument reveals the labour behind imperial construction.",
     ],
-    vocabularyFocus: ["fortification", "corridors", "parapet", "vigilance", "endurance"],
+    vocabularyFocus: ["fortification", "corridors", "ridge", "infrastructure", "endurance"],
     questions: [
-      "Why does the article reject the idea of the wall as one continuous line?",
-      "How does the terrain shape the architecture of the wall?",
-      "What human story becomes visible when the monument is viewed up close?",
+      "Why is the wall better described as a system than a single line?",
+      "How does terrain shape the wall's architecture?",
+      "What human story becomes visible when we look beyond the monument's scale?",
     ],
-    modelSrc: "/models/landmarks/great-wall.glb",
+    modelSrc: "/models/landmarks/greatwall.glb",
     theme: {
       accent: "#9a3412",
       glow: "rgba(154, 52, 18, 0.18)",
@@ -56,27 +56,27 @@ For modern visitors, the Great Wall can feel cinematic from afar and intensely h
     slug: "machu-picchu",
     title: "Machu Picchu",
     titleZh: "马丘比丘",
-    summary: "A mountain citadel where stonework, altitude, and ritual planning create a city that still feels improbable.",
+    summary: "A mountain citadel where stonework, altitude, and careful planning create a city that still feels improbable.",
     topic: "Mountain City",
     difficulty: "B2",
     estimatedMinutes: 5,
-    body: `Machu Picchu occupies one of the most dramatic settings in world architecture. Built high in the Andes, the site seems to appear out of mist and steep green slopes rather than to sit on ordinary ground. That setting is not accidental decoration. The city is inseparable from its mountain environment, and much of its power comes from the way planning responds to altitude, weather, and sacred geography.
+    body: `Machu Picchu occupies one of the most dramatic settings in world architecture. Built high in the Andes, it seems to emerge from mist and steep green slopes rather than to rest on ordinary ground.
 
-The stonework remains one of its most admired qualities. Blocks were shaped with remarkable precision, allowing walls to hold together without heavy mortar. Terraces stabilized the land, supported cultivation, and turned difficult slopes into usable civic space. The result is a settlement that feels disciplined without becoming rigid.
+Its stonework remains one of its most admired qualities. Blocks were shaped with great precision, allowing walls to hold together without heavy mortar. Terraces stabilized the land and turned difficult slopes into usable civic space.
 
-Machu Picchu is often presented as a lost city, yet that phrase can simplify more than it explains. The site was part of a larger imperial and cultural world. Its meaning lies not only in mystery, but in engineering skill, ceremonial order, and the sophisticated relationship between architecture and landscape.
+The site is often described as a lost city, but that phrase can oversimplify it. Machu Picchu was part of a wider imperial world with its own political, agricultural, and ceremonial logic.
 
-Seen today, the citadel offers a lesson in restraint. The buildings do not dominate the mountains; they align with them. That balance helps explain why the place feels at once monumental and fragile, designed with conviction yet aware of the terrain that makes it possible.`,
+What makes the citadel memorable is its restraint. The buildings do not try to overpower the mountains. Instead, they align with the landscape so closely that architecture and environment feel almost fused.`,
     keyPoints: [
-      "Machu Picchu is powerful because city planning and mountain setting are tightly fused.",
-      "Its precision stonework and terraces reveal advanced engineering choices.",
-      "The site is more than a mystery narrative; it belongs to a larger cultural system.",
+      "Machu Picchu combines city planning with an extreme mountain setting.",
+      "Its terraces and stonework show advanced engineering choices.",
+      "The site belongs to a broader cultural system, not just a mystery narrative.",
     ],
     vocabularyFocus: ["citadel", "terraces", "ceremonial", "restraint", "precision"],
     questions: [
-      "How does the article describe the relationship between the city and the mountains?",
-      "What practical roles did the terraces perform?",
-      "Why does the writer push back against the phrase lost city?",
+      "How does the city relate to the mountain environment?",
+      "What practical role did terraces play at Machu Picchu?",
+      "Why is the phrase lost city not fully satisfying?",
     ],
     modelSrc: "/models/landmarks/machu-picchu.glb",
     theme: {
@@ -96,47 +96,223 @@ Seen today, the citadel offers a lesson in restraint. The buildings do not domin
     },
   },
   {
-    id: "petra",
-    slug: "petra",
-    title: "Petra",
-    titleZh: "佩特拉",
-    summary: "An exploration of carved facades, desert routes, and a city whose architecture was cut directly from stone.",
-    topic: "Rock-Cut City",
+    id: "tower-of-babel",
+    slug: "tower-of-babel",
+    title: "The Tower of Babel",
+    titleZh: "巴别塔",
+    summary: "A reading piece on ambition, language, and the enduring power of a structure that lives between myth and symbol.",
+    topic: "Mythic Tower",
     difficulty: "B2",
     estimatedMinutes: 5,
-    body: `Petra does not rise from quarried blocks assembled into walls. Instead, much of its most memorable architecture was carved into the rock itself. This reversal changes the way the city is perceived. A facade in Petra is not merely attached to a mountain face; it is the mountain face, shaped into thresholds, columns, and chambers through subtraction rather than construction.
+    body: `The Tower of Babel is not important because historians can point to a single surviving building. Its power comes from the story attached to it: a tower built high enough to challenge the proper distance between human beings and the divine.
 
-Its fame is often concentrated in the Treasury, yet Petra was also a wider urban and trading landscape. Located near important caravan routes, it connected movement, commerce, and environmental knowledge. Water management was especially important in such a dry region, and the city's survival depended on systems that collected, stored, and directed scarce resources.
+In many readings, the tower represents ambition without limit. The upward drive of the structure becomes a visual metaphor for pride, while the confusion of languages turns architecture into a warning about broken communication.
 
-The visual drama of Petra comes partly from concealment. Approaching through narrow rock passages creates suspense before the architecture opens into view. This sequence gives the city a theatrical quality, but it also highlights how space can be curated by geology itself.
+That symbolic force helps explain why Babel continues to appear in paintings, literature, and political commentary. It can stand for empire, technological overconfidence, or the fantasy that scale alone can guarantee unity.
 
-Petra therefore rewards more than admiration for a famous facade. It invites attention to craft, trade, and infrastructure. The city remains compelling because it transforms harsh terrain into an inhabited design language without pretending the desert is easy.`,
+As a reading subject, Babel reminds us that buildings are not only physical objects. Some of the most influential structures in culture are powerful because they organize imagination, memory, and moral reflection.`,
     keyPoints: [
-      "Petra's architecture is carved from rock, not assembled in front of it.",
-      "Its urban life depended on trade routes and sophisticated water systems.",
-      "The approach to Petra uses concealment and reveal as part of the experience.",
+      "Babel matters primarily as a symbolic structure rather than a surviving monument.",
+      "The tower is often read as a warning about limitless ambition.",
+      "Its story connects architecture with language and power.",
     ],
-    vocabularyFocus: ["facade", "subtraction", "caravan", "scarce", "geology"],
+    vocabularyFocus: ["mythic", "ambition", "metaphor", "confusion", "unity"],
     questions: [
-      "Why does the article say Petra changes the usual idea of construction?",
-      "What made water management so important to the city?",
-      "How does the approach to Petra shape the visitor's experience?",
+      "Why does Babel remain influential even without a clear physical original?",
+      "How does vertical architecture become a moral symbol in the story?",
+      "What modern concerns can Babel still represent today?",
     ],
-    modelSrc: "/models/landmarks/petra-treasury.glb",
+    modelSrc: "/models/landmarks/babieta.glb",
     theme: {
-      accent: "#b45309",
-      glow: "rgba(180, 83, 9, 0.18)",
+      accent: "#7c2d12",
+      glow: "rgba(124, 45, 18, 0.18)",
       surface: "from-amber-100 via-white to-orange-50",
     },
     cameraPreset: {
-      initialPosition: [-0.06, -0.04, 6.15],
+      initialPosition: [0.03, -0.04, 6.18],
       target: [0, -0.08, 0],
       minDistance: 4.8,
       maxDistance: 9.1,
-      minPolarAngle: 0.97,
+      minPolarAngle: 0.95,
+      maxPolarAngle: 2.08,
+      minAzimuthAngle: -0.9,
+      maxAzimuthAngle: 0.9,
+    },
+  },
+  {
+    id: "notre-dame",
+    slug: "notre-dame-de-paris",
+    title: "Notre-Dame de Paris",
+    titleZh: "巴黎圣母院",
+    summary: "An article about height, ritual, and the long cultural memory carried by one of Europe's most famous cathedrals.",
+    topic: "Cathedral",
+    difficulty: "B2",
+    estimatedMinutes: 5,
+    body: `Notre-Dame de Paris was designed not only as a place of worship, but also as a public statement of faith, craftsmanship, and urban identity. Its towers, vaults, and stained glass helped define how sacred architecture could shape a city.
+
+Gothic cathedrals use height in a very deliberate way. Vertical lines pull the eye upward, while filtered light and structural rhythm create an atmosphere that feels solemn without becoming empty.
+
+The cathedral's meaning has continued to evolve across centuries. It has been a religious site, a literary symbol, a tourist landmark, and more recently a reminder of how fragile cultural heritage can be.
+
+To read Notre-Dame well is to notice both engineering and memory. Stone ribs, pointed arches, and great windows matter, but so do the emotions people project onto the building across time.`,
+    keyPoints: [
+      "Notre-Dame combines sacred function with strong civic symbolism.",
+      "Gothic height and light shape the visitor's emotional experience.",
+      "The cathedral's modern meaning includes preservation and shared memory.",
+    ],
+    vocabularyFocus: ["cathedral", "vaults", "solemn", "heritage", "civic"],
+    questions: [
+      "How does Notre-Dame function as more than a religious building?",
+      "What role do height and light play in Gothic architecture?",
+      "Why is the cathedral also a modern symbol of cultural memory?",
+    ],
+    modelSrc: "/models/landmarks/balishengmuyuan.glb",
+    theme: {
+      accent: "#1d4ed8",
+      glow: "rgba(29, 78, 216, 0.16)",
+      surface: "from-sky-100 via-white to-blue-50",
+    },
+    cameraPreset: {
+      initialPosition: [0.02, -0.03, 6.14],
+      target: [0, -0.08, 0],
+      minDistance: 4.8,
+      maxDistance: 9,
+      minPolarAngle: 0.96,
+      maxPolarAngle: 2.1,
+      minAzimuthAngle: -0.94,
+      maxAzimuthAngle: 0.94,
+    },
+  },
+  {
+    id: "hanging-gardens",
+    slug: "hanging-gardens-of-babylon",
+    title: "The Hanging Gardens of Babylon",
+    titleZh: "空中花园",
+    summary: "A reflection on one of antiquity's most famous wonders, where architecture and imagination meet in terraces of mythic greenery.",
+    topic: "Ancient Wonder",
+    difficulty: "B2",
+    estimatedMinutes: 5,
+    body: `The Hanging Gardens of Babylon occupy a special place in cultural history because they feel plausible and impossible at the same time. The image of elevated gardens rising above an ancient city continues to fascinate even though historical evidence remains uncertain.
+
+What makes the story so durable is the combination of engineering and desire. Terraces, irrigation, and layered planting suggest a world in which architecture does not resist nature, but lifts and stages it.
+
+In that sense, the gardens become more than a lost wonder. They represent a recurring human dream: to create an artificial paradise through design, technology, and careful control of the environment.
+
+Whether or not the gardens existed exactly as later writers described them, they remain useful as a reading topic because they show how legend can shape architectural imagination for centuries.`,
+    keyPoints: [
+      "The Hanging Gardens are powerful because they sit between history and legend.",
+      "Their imagined design joins architecture, water, and plant life.",
+      "The story expresses a deep human desire to build paradise.",
+    ],
+    vocabularyFocus: ["terraces", "irrigation", "plausible", "artificial", "legend"],
+    questions: [
+      "Why do the gardens still fascinate people despite uncertain evidence?",
+      "How does the idea of raised gardens combine nature with engineering?",
+      "What larger human dream does the story represent?",
+    ],
+    modelSrc: "/models/landmarks/hanging gardens.glb",
+    theme: {
+      accent: "#15803d",
+      glow: "rgba(21, 128, 61, 0.16)",
+      surface: "from-green-100 via-white to-emerald-50",
+    },
+    cameraPreset: {
+      initialPosition: [0.01, -0.04, 6.16],
+      target: [0, -0.08, 0],
+      minDistance: 4.82,
+      maxDistance: 9.02,
+      minPolarAngle: 0.96,
       maxPolarAngle: 2.1,
       minAzimuthAngle: -0.92,
       maxAzimuthAngle: 0.92,
+    },
+  },
+  {
+    id: "eiffel-tower",
+    slug: "eiffel-tower",
+    title: "The Eiffel Tower",
+    titleZh: "埃菲尔铁塔",
+    summary: "A study of iron, visibility, and how a once-controversial structure became the defining image of Paris.",
+    topic: "Urban Landmark",
+    difficulty: "B2",
+    estimatedMinutes: 5,
+    body: `The Eiffel Tower was originally built for the 1889 Exposition Universelle, and many critics considered it too industrial, too exposed, or simply too strange. Yet over time the tower became one of the most recognizable structures in the world.
+
+Its visual power depends on clarity. The exposed iron frame does not hide how it stands. Instead, the structure turns engineering into spectacle and makes modern construction itself part of the aesthetic experience.
+
+The tower also changed how cities could be seen. It offers a high vantage point, but it also transforms the skyline when viewed from below or from a distance. In both directions, it reorganizes urban perception.
+
+The Eiffel Tower matters because it shows how public taste can change. A structure once mocked as temporary and ugly can become a symbol of elegance once culture learns how to read it differently.`,
+    keyPoints: [
+      "The Eiffel Tower turned exposed engineering into architectural beauty.",
+      "Its meaning depends on visibility, scale, and urban perspective.",
+      "The monument shows how public opinion about design can evolve.",
+    ],
+    vocabularyFocus: ["industrial", "exposed", "spectacle", "skyline", "vantage"],
+    questions: [
+      "Why was the Eiffel Tower controversial at first?",
+      "How does the tower make engineering part of its visual appeal?",
+      "What does the building teach us about changing public taste?",
+    ],
+    modelSrc: "/models/landmarks/ifeiertieta.glb",
+    theme: {
+      accent: "#6b7280",
+      glow: "rgba(107, 114, 128, 0.16)",
+      surface: "from-slate-100 via-white to-zinc-50",
+    },
+    cameraPreset: {
+      initialPosition: [0.02, -0.02, 6.1],
+      target: [0, -0.08, 0],
+      minDistance: 4.7,
+      maxDistance: 8.95,
+      minPolarAngle: 0.92,
+      maxPolarAngle: 2.08,
+      minAzimuthAngle: -0.88,
+      maxAzimuthAngle: 0.88,
+    },
+  },
+  {
+    id: "pyramids",
+    slug: "great-pyramids-of-giza",
+    title: "The Great Pyramids of Giza",
+    titleZh: "吉萨金字塔",
+    summary: "A reading feature about geometry, burial, and the extraordinary durability of one of the ancient world's defining forms.",
+    topic: "Monumental Tomb",
+    difficulty: "B2",
+    estimatedMinutes: 5,
+    body: `The pyramids of Giza remain astonishing because their geometry is so clear and their scale is so difficult to absorb. A pyramid looks simple from afar, yet that simplicity depends on immense organization, labour, and planning.
+
+These structures were not abstract exercises in form. They were funerary monuments built to support ideas about kingship, death, and the afterlife. Their shape therefore carries symbolic as well as technical meaning.
+
+The desert setting intensifies their impact. Against open land and bright light, the pyramids appear stable, severe, and almost beyond time. Few structures project permanence so effectively.
+
+Modern visitors often focus on size alone, but the pyramids are equally worth studying as examples of disciplined geometry. Their power lies in how a reduced form can carry enormous cultural weight.`,
+    keyPoints: [
+      "The pyramids combine severe geometry with extraordinary scale.",
+      "They were funerary monuments tied to political and spiritual beliefs.",
+      "Their simplicity is the result of enormous organization and labour.",
+    ],
+    vocabularyFocus: ["geometry", "funerary", "afterlife", "permanence", "discipline"],
+    questions: [
+      "Why is the pyramid form more complex than it first appears?",
+      "How does funerary purpose shape the meaning of these monuments?",
+      "What role does the desert setting play in their visual effect?",
+    ],
+    modelSrc: "/models/landmarks/jinzita.glb",
+    theme: {
+      accent: "#b45309",
+      glow: "rgba(180, 83, 9, 0.18)",
+      surface: "from-yellow-100 via-white to-amber-50",
+    },
+    cameraPreset: {
+      initialPosition: [0.01, -0.04, 6.12],
+      target: [0, -0.08, 0],
+      minDistance: 4.78,
+      maxDistance: 9,
+      minPolarAngle: 0.95,
+      maxPolarAngle: 2.1,
+      minAzimuthAngle: -0.9,
+      maxAzimuthAngle: 0.9,
     },
   },
   {
@@ -148,25 +324,25 @@ Petra therefore rewards more than admiration for a famous facade. It invites att
     topic: "Arena",
     difficulty: "B2",
     estimatedMinutes: 5,
-    body: `The Colosseum is one of the clearest examples of architecture built around organised spectacle. Its elliptical form, layered seating, and complex entrances were designed to move large crowds efficiently while directing attention toward a central performance space. Even in ruin, the building still communicates the confidence of a city that wanted power to be seen collectively.
+    body: `The Colosseum is one of the clearest examples of architecture built around organized spectacle. Its elliptical form, layered seating, and complex entrances were designed to move large crowds efficiently while directing attention toward a central performance space.
 
-Engineering played a crucial role in that effect. Vaults, arches, and circulation routes helped thousands of spectators enter, sit, and leave with surprising order. The structure was not only large; it was operationally intelligent. The building managed bodies, sightlines, and social hierarchy at the same time.
+Engineering played a crucial role in that effect. Vaults, arches, and circulation routes helped thousands of spectators enter, sit, and leave with surprising order. The building was not only large; it was operationally intelligent.
 
-Modern viewers often approach the Colosseum as a romantic ruin, softened by time and tourism. Yet its original function was more difficult. It hosted public entertainment shaped by imperial politics and social control. Admiring the architecture therefore means confronting both technical achievement and the moral complexity of what that achievement supported.
+At the same time, the monument is morally complex. It hosted entertainments tied to imperial power, discipline, and violence. Admiring the structure therefore requires more than romantic appreciation of ruins.
 
-That tension is part of the monument's lasting significance. The Colosseum is compelling not because it is easy to celebrate, but because it reveals how architecture can combine beauty, efficiency, and domination in the same form.`,
+That tension is part of its importance. The Colosseum shows how architecture can combine beauty, efficiency, and domination in the same form.`,
     keyPoints: [
-      "The Colosseum was designed as an efficient machine for public spectacle.",
-      "Its circulation system organized sightlines, crowds, and social rank.",
-      "The monument also raises ethical questions about the uses of great architecture.",
+      "The Colosseum was designed as a machine for public spectacle.",
+      "Its circulation system organized crowds with unusual efficiency.",
+      "The monument also raises ethical questions about the uses of architecture.",
     ],
-    vocabularyFocus: ["elliptical", "circulation", "spectators", "hierarchy", "domination"],
+    vocabularyFocus: ["elliptical", "circulation", "spectators", "imperial", "domination"],
     questions: [
-      "What makes the building more than simply a large arena?",
-      "How did architecture help manage spectators inside the Colosseum?",
-      "Why does the article describe the monument as morally complex?",
+      "What makes the Colosseum more than simply a large arena?",
+      "How did architecture help control the movement of spectators?",
+      "Why is the building described as morally complex?",
     ],
-    modelSrc: "/models/landmarks/colosseum.glb",
+    modelSrc: "/models/landmarks/luomadoushouchang.glb",
     theme: {
       accent: "#991b1b",
       glow: "rgba(153, 27, 27, 0.18)",
@@ -182,259 +358,43 @@ That tension is part of the monument's lasting significance. The Colosseum is co
       minAzimuthAngle: -0.95,
       maxAzimuthAngle: 0.95,
     },
-  },
-  {
-    id: "angkor-wat",
-    slug: "angkor-wat",
-    title: "Angkor Wat",
-    titleZh: "吴哥窟",
-    summary: "A temple complex where scale, symmetry, and cosmology are translated into stone and water.",
-    topic: "Temple Complex",
-    difficulty: "B2",
-    estimatedMinutes: 6,
-    body: `Angkor Wat is often admired first for its silhouette: towers rising in sequence above a broad horizontal base, reflected in surrounding water. That image is powerful, but the monument becomes even more compelling when understood as a planned cosmological landscape. Causeways, galleries, courtyards, and bas-reliefs all contribute to a larger symbolic order rather than standing as isolated decorations.
-
-The temple's scale is inseparable from its system of movement. Visitors are drawn forward through long axial routes, then slowed by thresholds, stairs, and enclosed passages. Architecture here is not static scenery. It guides tempo, anticipation, and perception.
-
-Stone carving deepens that effect. The walls preserve extensive narrative reliefs whose detail rewards close reading after the larger form has already impressed the eye. This combination of monumental planning and intimate surface work gives Angkor Wat unusual range. It can be understood from a distance as a whole and from nearby as a field of stories.
-
-Today the site also raises questions about preservation, tourism, and environmental change. Its endurance is remarkable, but that endurance should not be mistaken for invulnerability. Angkor Wat remains great partly because it still asks contemporary visitors to balance admiration with care.`,
-    keyPoints: [
-      "Angkor Wat works as a symbolic landscape, not just a single temple image.",
-      "Its architecture carefully controls movement and tempo.",
-      "Monumental form and intricate narrative carving coexist throughout the site.",
-    ],
-    vocabularyFocus: ["cosmological", "axial", "thresholds", "bas-reliefs", "preservation"],
-    questions: [
-      "Why does the article describe Angkor Wat as a landscape as well as a building?",
-      "How does the temple guide the visitor's pace?",
-      "What tension does the modern site create between admiration and care?",
-    ],
-    modelSrc: "/models/landmarks/angkor-wat.glb",
-    theme: {
-      accent: "#7c2d12",
-      glow: "rgba(124, 45, 18, 0.18)",
-      surface: "from-orange-100 via-white to-yellow-50",
-    },
-    cameraPreset: {
-      initialPosition: [-0.04, -0.05, 6.25],
-      target: [0, -0.08, 0],
-      minDistance: 4.85,
-      maxDistance: 9.2,
-      minPolarAngle: 0.98,
-      maxPolarAngle: 2.1,
-      minAzimuthAngle: -0.9,
-      maxAzimuthAngle: 0.9,
+    sceneTuning: {
+      scale: 0.88,
+      modelYaw: Math.PI,
     },
   },
   {
-    id: "taj-mahal",
-    slug: "taj-mahal",
-    title: "The Taj Mahal",
-    titleZh: "泰姬陵",
-    summary: "An essay on symmetry, grief, and the disciplined elegance of one of the world's most studied mausoleums.",
-    topic: "Mausoleum",
+    id: "maya-temple",
+    slug: "maya-temple",
+    title: "A Maya Temple",
+    titleZh: "玛雅神庙",
+    summary: "An article about steps, ritual, and the way Mesoamerican temple forms turn height into public meaning.",
+    topic: "Ceremonial Pyramid",
     difficulty: "B2",
     estimatedMinutes: 5,
-    body: `The Taj Mahal is frequently described through beauty alone, yet its emotional and architectural power depends on discipline rather than ornament in isolation. Symmetry shapes the entire complex. Gardens, reflecting pools, gateways, and the mausoleum itself work together to produce balance that feels serene rather than cold.
+    body: `Maya temple architecture often combines a stepped base, a strong profile, and a carefully elevated sacred zone. Even when we view a single structure rather than an entire city, the form suggests ceremony, procession, and authority.
 
-Material choice is central to that experience. White marble changes character with light, moving from soft dawn colour to intense midday brightness and muted evening tone. Inlay work and carved details reward slower looking, but they never overwhelm the total composition. The building remains calm even when richly finished.
+The stairway is especially important. It does more than connect ground to summit. It stages movement in public view and turns ascent into part of the building's meaning.
 
-The monument is also inseparable from mourning. Built as a funerary complex, it transforms personal loss into a public architectural statement. That origin matters because it changes how elegance is read. The precision is not merely decorative; it gives grief a durable, ceremonial order.
+These temples also reveal how geometry can organize belief. Sharp edges, repeated levels, and an elevated shrine create a structure that feels ordered, deliberate, and spiritually charged.
 
-This helps explain why the Taj Mahal continues to feel distinct even among famous landmarks. It is neither simply grand nor simply delicate. Its achievement lies in making emotional weight appear weightless through geometry, material, and extraordinary control of proportion.`,
+For readers, a Maya temple is a useful subject because it shows how architecture can guide collective attention without relying on interior size. The building's power comes from form, sequence, and symbolic height.`,
     keyPoints: [
-      "The Taj Mahal's beauty depends on strict overall balance.",
-      "Changing light is part of how the marble architecture is experienced.",
-      "The monument's emotional meaning comes from its funerary purpose.",
+      "Maya temple design links stepped geometry with ceremonial movement.",
+      "Stairs and elevation help turn architecture into public ritual.",
+      "The structure's power depends on clarity of form rather than interior volume.",
     ],
-    vocabularyFocus: ["symmetry", "mausoleum", "inlay", "ceremonial", "proportion"],
+    vocabularyFocus: ["procession", "summit", "elevated", "profile", "ritual"],
     questions: [
-      "Why does the article say the building is disciplined rather than merely ornamental?",
-      "How does light affect the experience of the marble surfaces?",
-      "What does the funerary origin add to the architecture's meaning?",
+      "Why is the stairway central to the meaning of a Maya temple?",
+      "How does stepped geometry shape the visitor's perception?",
+      "What kind of authority does this architecture project?",
     ],
-    modelSrc: "/models/landmarks/taj-mahal.glb",
+    modelSrc: "/models/landmarks/maya temple .glb",
     theme: {
       accent: "#0f766e",
       glow: "rgba(15, 118, 110, 0.16)",
-      surface: "from-cyan-100 via-white to-teal-50",
-    },
-    cameraPreset: {
-      initialPosition: [0.02, -0.04, 6.18],
-      target: [0, -0.08, 0],
-      minDistance: 4.8,
-      maxDistance: 9.05,
-      minPolarAngle: 0.96,
-      maxPolarAngle: 2.12,
-      minAzimuthAngle: -0.9,
-      maxAzimuthAngle: 0.9,
-    },
-  },
-  {
-    id: "mont-saint-michel",
-    slug: "mont-saint-michel",
-    title: "Mont-Saint-Michel",
-    titleZh: "圣米歇尔山",
-    summary: "A tidal island where monastery, fortification, and settlement compress into one unforgettable vertical composition.",
-    topic: "Island Abbey",
-    difficulty: "B2",
-    estimatedMinutes: 5,
-    body: `Mont-Saint-Michel appears almost unreal because its architecture rises directly from an island that changes character with the tide. At one moment it seems attached to the mainland by exposed flats; at another it appears dramatically separate. This unstable setting is part of the monument's identity, shaping both access and imagination.
-
-The built form intensifies that effect through vertical layering. Streets, walls, houses, and the abbey stack upward in compressed sequence, making the site read like a lesson in density. Few places show so clearly how religious, defensive, and civic functions can occupy the same narrow footprint.
-
-Walking through Mont-Saint-Michel means experiencing constant shifts of scale. Tight passages suddenly open to views across water and sky. Heavy stone gives way to light and wind at the summit. These transitions make the island feel larger in experience than in area.
-
-Its continued popularity poses an obvious challenge: how can a fragile, symbolic place remain accessible without being flattened by crowds? Mont-Saint-Michel endures because it is both an image and a real settlement. Preserving that dual identity is part of the work of valuing it.`,
-    keyPoints: [
-      "Tide is not background scenery at Mont-Saint-Michel; it defines the site.",
-      "The island compresses religious, defensive, and civic functions into one form.",
-      "Preservation depends on protecting both the image and the lived place.",
-    ],
-    vocabularyFocus: ["tidal", "compressed", "footprint", "summit", "fragile"],
-    questions: [
-      "How does the tide affect the meaning of the site?",
-      "Why does the architecture feel larger than the island's actual area?",
-      "What preservation challenge does tourism create here?",
-    ],
-    modelSrc: "/models/landmarks/mont-saint-michel.glb",
-    theme: {
-      accent: "#1d4ed8",
-      glow: "rgba(29, 78, 216, 0.16)",
-      surface: "from-sky-100 via-white to-blue-50",
-    },
-    cameraPreset: {
-      initialPosition: [0.05, -0.02, 6.22],
-      target: [0, -0.06, 0],
-      minDistance: 4.85,
-      maxDistance: 9.15,
-      minPolarAngle: 0.94,
-      maxPolarAngle: 2.1,
-      minAzimuthAngle: -0.96,
-      maxAzimuthAngle: 0.96,
-    },
-  },
-  {
-    id: "acropolis",
-    slug: "acropolis-of-athens",
-    title: "The Acropolis of Athens",
-    titleZh: "雅典卫城",
-    summary: "An elevated ensemble of temples and civic memory overlooking the city that grew beneath it.",
-    topic: "Sacred Hill",
-    difficulty: "B2",
-    estimatedMinutes: 5,
-    body: `The Acropolis is not simply a hill with ancient ruins on top. It is a deliberately staged high ground where architecture, politics, religion, and visibility were brought together. Rising above Athens, the site made certain values legible from afar while also creating a ceremonial destination within the city.
-
-The Parthenon remains its most famous structure, but the wider ensemble matters. Gateways, temples, and terrain all shape the experience of approach. Movement upward is part of the architecture's meaning, preparing the visitor through ascent, framing, and changing perspective.
-
-Time is especially visible at the Acropolis. Damage, restoration, and reinterpretation have all left marks on the site. It therefore stands not as a frozen classical ideal, but as a place repeatedly used to define cultural identity across different eras.
-
-That long afterlife is one reason the Acropolis still matters so much. It is an archaeological site, a national symbol, and a global reference point all at once. Reading it well means recognising both the ancient achievement and the later histories that keep reusing it.`,
-    keyPoints: [
-      "The Acropolis combines elevation, ceremony, and visibility in one planned setting.",
-      "Approach and ascent are part of the site's architectural meaning.",
-      "Its significance includes both ancient building and later historical reuse.",
-    ],
-    vocabularyFocus: ["ensemble", "ceremonial", "ascent", "reinterpretation", "archaeological"],
-    questions: [
-      "Why does the article say the Acropolis is more than ruins on a hill?",
-      "How does movement toward the site shape its meaning?",
-      "What later histories remain visible at the Acropolis?",
-    ],
-    modelSrc: "/models/landmarks/acropolis.glb",
-    theme: {
-      accent: "#7c3aed",
-      glow: "rgba(124, 58, 237, 0.16)",
-      surface: "from-violet-100 via-white to-indigo-50",
-    },
-    cameraPreset: {
-      initialPosition: [-0.08, -0.04, 6.12],
-      target: [0, -0.08, 0],
-      minDistance: 4.8,
-      maxDistance: 9,
-      minPolarAngle: 0.97,
-      maxPolarAngle: 2.12,
-      minAzimuthAngle: -0.94,
-      maxAzimuthAngle: 0.94,
-    },
-  },
-  {
-    id: "alhambra",
-    slug: "alhambra",
-    title: "The Alhambra",
-    titleZh: "阿尔罕布拉宫",
-    summary: "A palace and fortress complex where light, water, and ornament shape a refined architectural atmosphere.",
-    topic: "Palace Complex",
-    difficulty: "B2",
-    estimatedMinutes: 5,
-    body: `The Alhambra is remarkable not because it overwhelms the visitor with scale, but because it demonstrates how atmosphere can become architecture. Courtyards, arcades, inscriptions, water channels, and filtered light work together to produce an environment of calm precision. The effect is immersive without being heavy.
-
-Its ornament deserves close attention because it is structural to the experience rather than secondary decoration. Pattern, carved stucco, tile, and calligraphy build surfaces that feel intellectually ordered as well as sensuous. Repetition does not flatten the space; it gives rhythm to looking.
-
-Water is another essential design material at the Alhambra. Pools reflect buildings, channels guide the eye, and sound softens transitions between rooms and gardens. These choices create a palace complex that depends as much on perception as on walls.
-
-The Alhambra also embodies layered history. Built and transformed across different political periods, it cannot be reduced to one simple identity. That complexity strengthens the site. It remains compelling because beauty here is inseparable from memory, adaptation, and historical change.`,
-    keyPoints: [
-      "The Alhambra shows how atmosphere can be designed with great precision.",
-      "Ornament, light, and water are central rather than optional elements.",
-      "Its beauty is deepened by a long, layered historical life.",
-    ],
-    vocabularyFocus: ["arcades", "calligraphy", "sensuous", "perception", "layered"],
-    questions: [
-      "Why does the article say atmosphere itself becomes architecture here?",
-      "What role does water play in the design experience?",
-      "How does layered history affect the meaning of the Alhambra?",
-    ],
-    modelSrc: "/models/landmarks/alhambra.glb",
-    theme: {
-      accent: "#be185d",
-      glow: "rgba(190, 24, 93, 0.16)",
-      surface: "from-rose-100 via-white to-pink-50",
-    },
-    cameraPreset: {
-      initialPosition: [0.06, -0.03, 6.16],
-      target: [0, -0.08, 0],
-      minDistance: 4.82,
-      maxDistance: 9.08,
-      minPolarAngle: 0.95,
-      maxPolarAngle: 2.11,
-      minAzimuthAngle: -0.94,
-      maxAzimuthAngle: 0.94,
-    },
-  },
-  {
-    id: "chichen-itza",
-    slug: "chichen-itza",
-    title: "Chichen Itza",
-    titleZh: "奇琴伊察",
-    summary: "A Mesoamerican ceremonial center where astronomy, authority, and stone geometry meet in public form.",
-    topic: "Ceremonial Center",
-    difficulty: "B2",
-    estimatedMinutes: 5,
-    body: `Chichen Itza is often reduced to one image: the stepped pyramid known as El Castillo. That structure is indeed striking, but the wider site matters because it reveals an urban and ceremonial landscape shaped by calculation, ritual, and political authority. Architecture here organized collective attention on a civic scale.
-
-Geometry is one of the site's most memorable qualities. Terraces, stairs, and strict profiles create clear visual order, while alignments have long encouraged discussion about astronomical observation and symbolic timing. Even for visitors without specialist knowledge, the architecture communicates intention with unusual force.
-
-The site also reminds us that public monuments can perform many kinds of power at once. Ceremonial meaning, social gathering, and the display of control were not separate categories. They were fused in buildings designed to be seen, approached, and remembered.
-
-Today Chichen Itza stands within broader conversations about conservation, tourism, and the interpretation of Indigenous histories. Its importance lies not only in age or fame, but in the disciplined clarity with which built form can shape public imagination across centuries.`,
-    keyPoints: [
-      "Chichen Itza is a broader ceremonial landscape, not just one pyramid.",
-      "Its geometry communicates authority and intention with great clarity.",
-      "Modern interpretation must connect conservation with Indigenous history.",
-    ],
-    vocabularyFocus: ["ceremonial", "profiles", "alignments", "Indigenous", "conservation"],
-    questions: [
-      "Why is the site more than the image of one pyramid?",
-      "How does geometry contribute to the power of the architecture?",
-      "What present-day responsibilities does the article connect to the site?",
-    ],
-    modelSrc: "/models/landmarks/chichen-itza.glb",
-    theme: {
-      accent: "#15803d",
-      glow: "rgba(21, 128, 61, 0.16)",
-      surface: "from-green-100 via-white to-emerald-50",
+      surface: "from-teal-100 via-white to-emerald-50",
     },
     cameraPreset: {
       initialPosition: [-0.02, -0.05, 6.14],
@@ -445,6 +405,50 @@ Today Chichen Itza stands within broader conversations about conservation, touri
       maxPolarAngle: 2.1,
       minAzimuthAngle: -0.92,
       maxAzimuthAngle: 0.92,
+    },
+  },
+  {
+    id: "chinese-pagoda",
+    slug: "traditional-chinese-pagoda",
+    title: "The Epang Palace",
+    titleZh: "阿房宫",
+    summary: "A reading feature on imperial ambition, imagined grandeur, and the cultural memory of the Epang Palace.",
+    topic: "Epang Palace",
+    difficulty: "B2",
+    estimatedMinutes: 5,
+    body: `The Epang Palace is one of the most famous palace sites associated with Qin imperial power. Although later writers often imagined it as an enormous and dazzling complex, archaeology reminds us that its history is more complicated than legend alone.
+
+In traditional accounts, the palace became a symbol of ambition on a vast scale. Its name evokes raised terraces, broad halls, and the desire to turn political authority into visible architectural force.
+
+The site is also remembered through literature. Du Mu's "Epang Palace Rhapsody" turned the palace into a moral image: splendid buildings could not protect a dynasty if power forgot restraint.
+
+For learners, the Epang Palace is helpful because it shows how architecture can become cultural memory. Even when the physical remains are uncertain, a place can survive through history, poetry, and public imagination.`,
+    keyPoints: [
+      "The Epang Palace is linked to Qin imperial ambition and centralized power.",
+      "Its later image combines historical evidence, legend, and literary imagination.",
+      "The palace became a warning about excess, authority, and political collapse.",
+    ],
+    vocabularyFocus: ["imperial", "ambition", "terrace", "restraint", "rhapsody"],
+    questions: [
+      "Why did the Epang Palace become a symbol of imperial ambition?",
+      "How can literature change the way later readers remember a building?",
+      "What warning does the story of the palace offer about power and excess?",
+    ],
+    modelSrc: "/models/landmarks/traditional chinese pagoda 3d model.glb",
+    theme: {
+      accent: "#7c3aed",
+      glow: "rgba(124, 58, 237, 0.16)",
+      surface: "from-violet-100 via-white to-fuchsia-50",
+    },
+    cameraPreset: {
+      initialPosition: [0.03, -0.03, 6.08],
+      target: [0, -0.08, 0],
+      minDistance: 4.72,
+      maxDistance: 8.9,
+      minPolarAngle: 0.93,
+      maxPolarAngle: 2.08,
+      minAzimuthAngle: -0.9,
+      maxAzimuthAngle: 0.9,
     },
   },
 ];

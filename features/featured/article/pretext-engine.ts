@@ -68,6 +68,20 @@ export interface LinePlacement {
   textTransform: "none" | "uppercase";
 }
 
+interface ParagraphCursor {
+  segmentIndex: number;
+  graphemeIndex: number;
+}
+
+interface ParagraphState {
+  prepared: PreparedText;
+  cursor: ParagraphCursor;
+}
+
+export interface LayoutResult {
+  mainLines: LinePlacement[];
+}
+
 export interface PreparedBlock {
   id: string;
   bodyAlign: "left" | "right";
@@ -96,7 +110,7 @@ export const SCRUB_RANGES: ScrubRanges = {
   panRange: [-0.6, 0.6],
 };
 export const MASK_SIZE = { width: 1024, height: 576 };
-const MASK_PADDING = 20;
+const MASK_PADDING = 34;
 const MIN_JUSTIFY_WIDTH = 180;
 const MAX_RENDERER_DPR = 1.5;
 
@@ -395,7 +409,7 @@ export function prepareBlocks(article: FeaturedDemoConfig): PreparedBlock[] {
   });
 }
 
-function getRegions(width: number, height: number) {
+export function getRegions(width: number, height: number) {
   if (width < 980) {
     const fullWidth = width - 44;
 
@@ -409,10 +423,13 @@ function getRegions(width: number, height: number) {
 
   const rightColWidth = Math.min(width * 0.27, 360);
   const rightColX = width - rightColWidth - 38;
+  const centerColX = width * 0.356;
+  const centerColWidth = Math.min(width * 0.26, 360);
+  const centerSafeHeight = Math.min(height * 0.36, Math.max(250, height * 0.32));
 
   return [
     { id: "block-left", x: 32, y: 30, width: Math.min(width * 0.3, 430), height: height * 0.7 },
-    { id: "block-center", x: width * 0.356, y: 30, width: Math.min(width * 0.29, 400), height: height * 0.7 },
+    { id: "block-center", x: centerColX, y: 30, width: centerColWidth, height: centerSafeHeight },
     { id: "block-right", x: rightColX, y: 30, width: rightColWidth, height: height * 0.4 },
     { id: "block-note", x: rightColX, y: Math.max(380, height * 0.5), width: rightColWidth, height: height * 0.4 },
   ] satisfies Region[];
@@ -478,41 +495,33 @@ function placeFlowLine(
   return null;
 }
 
-function layoutBlock(
-  block: PreparedBlock,
+function layoutParagraphStates(
+  states: ParagraphState[],
+  bodyAlign: "left" | "right",
   region: Region,
-  mask: ImageData,
+  mask: ImageData | null,
   viewportWidth: number,
-  viewportHeight: number
+  viewportHeight: number,
+  initialY: number
 ) {
   const lines: LinePlacement[] = [];
-  let y = region.y + block.headerOffset;
+  const overflow: ParagraphState[] = [];
+  let y = initialY;
 
-  for (const leadLine of block.leadLines) {
-    const placed = placeFlowLine(leadLine, region, mask, viewportWidth, viewportHeight, y, BODY_LINE_HEIGHT, {
-      allowRightAlign: block.titleAlign === "right",
-    });
-
-    if (placed === null) {
-      y += leadLine.slotHeight;
-      continue;
-    }
-
-    lines.push(placed.line);
-    y = placed.nextY;
-  }
-
-  y += 16;
-
-  for (const preparedParagraph of block.preparedParagraphs) {
-    let cursor = { segmentIndex: 0, graphemeIndex: 0 };
+  for (let paragraphIndex = 0; paragraphIndex < states.length; paragraphIndex += 1) {
+    const state = states[paragraphIndex];
+    const cursor = { ...state.cursor };
+    let paragraphCompleted = false;
 
     while (y + BODY_LINE_HEIGHT <= region.y + region.height) {
-      const interval = getMaskIntervalForBand(mask, y - 4, y + BODY_LINE_HEIGHT + 2, viewportWidth, viewportHeight, {
-        threshold: 26,
-        padding: MASK_PADDING,
-        minPixels: 1,
-      });
+      const interval =
+        mask === null
+          ? null
+          : getMaskIntervalForBand(mask, y - 4, y + BODY_LINE_HEIGHT + 2, viewportWidth, viewportHeight, {
+              threshold: 26,
+              padding: MASK_PADDING,
+              minPixels: 1,
+            });
 
       const merged = interval === null ? [] : mergeIntervals([interval], region.x, region.x + region.width);
       const slots = carveTextLineSlots({ left: region.x, right: region.x + region.width }, merged, MIN_SLOT_WIDTH);
@@ -522,16 +531,19 @@ function layoutBlock(
         continue;
       }
 
-      const slot = chooseSlot(slots, block.bodyAlign);
+      const slot = chooseSlot(slots, bodyAlign);
       const slotWidth = slot.right - slot.left;
-      const line = layoutNextLine(preparedParagraph, cursor, slotWidth);
+      const line = layoutNextLine(state.prepared, cursor, slotWidth);
 
-      if (line === null) break;
+      if (line === null) {
+        paragraphCompleted = true;
+        break;
+      }
 
       const wordCount = line.text.trim().split(/\s+/).length;
       const isNarrowSlot = slotWidth < MIN_JUSTIFY_WIDTH || wordCount < 4;
       const justify = !isNarrowSlot && shouldJustifyLine(line.text, slotWidth, MIN_JUSTIFY_WIDTH);
-      const align = justify ? "justify" : block.bodyAlign;
+      const align = justify ? "justify" : bodyAlign;
 
       let wordSpacing = "0px";
       if (justify && wordCount > 1) {
@@ -555,14 +567,82 @@ function layoutBlock(
         textTransform: "none",
       });
 
-      cursor = line.end;
+      cursor.segmentIndex = line.end.segmentIndex;
+      cursor.graphemeIndex = line.end.graphemeIndex;
       y += BODY_LINE_HEIGHT;
+    }
+
+    if (!paragraphCompleted) {
+      overflow.push({
+        prepared: state.prepared,
+        cursor,
+      });
+
+      for (let remainingIndex = paragraphIndex + 1; remainingIndex < states.length; remainingIndex += 1) {
+        overflow.push({
+          prepared: states[remainingIndex].prepared,
+          cursor: { ...states[remainingIndex].cursor },
+        });
+      }
+      break;
     }
 
     y += BODY_LINE_HEIGHT * 0.8;
   }
 
-  return lines;
+  return { lines, overflow, nextY: y };
+}
+
+function layoutBlock(
+  block: PreparedBlock,
+  region: Region,
+  mask: ImageData,
+  viewportWidth: number,
+  viewportHeight: number,
+  incomingOverflow: ParagraphState[] = []
+) {
+  const lines: LinePlacement[] = [];
+  let y = region.y + block.headerOffset;
+
+  for (const leadLine of block.leadLines) {
+    const placed = placeFlowLine(leadLine, region, mask, viewportWidth, viewportHeight, y, BODY_LINE_HEIGHT, {
+      allowRightAlign: block.titleAlign === "right",
+    });
+
+    if (placed === null) {
+      y += leadLine.slotHeight;
+      continue;
+    }
+
+    lines.push(placed.line);
+    y = placed.nextY;
+  }
+
+  y += 16;
+  const paragraphStates: ParagraphState[] = [
+    ...incomingOverflow.map((state) => ({
+      prepared: state.prepared,
+      cursor: { ...state.cursor },
+    })),
+    ...block.preparedParagraphs.map((prepared) => ({
+      prepared,
+      cursor: { segmentIndex: 0, graphemeIndex: 0 },
+    })),
+  ];
+  const bodyResult = layoutParagraphStates(
+    paragraphStates,
+    block.bodyAlign,
+    region,
+    mask,
+    viewportWidth,
+    viewportHeight,
+    y
+  );
+
+  return {
+    lines: [...lines, ...bodyResult.lines],
+    overflow: bodyResult.overflow,
+  };
 }
 
 export function getLinePlacements(
@@ -570,15 +650,20 @@ export function getLinePlacements(
   mask: ImageData,
   viewportWidth: number,
   viewportHeight: number
-) {
+): LayoutResult {
   const regions = getRegions(viewportWidth, viewportHeight);
-  const lines: LinePlacement[] = [];
+  const mainLines: LinePlacement[] = [];
+  let overflowStates: ParagraphState[] = [];
 
   for (const block of preparedBlocks) {
     const region = regions.find((entry) => entry.id === block.id);
     if (!region) continue;
-    lines.push(...layoutBlock(block, region, mask, viewportWidth, viewportHeight));
+    const result = layoutBlock(block, region, mask, viewportWidth, viewportHeight, overflowStates);
+    mainLines.push(...result.lines);
+    overflowStates = result.overflow;
   }
 
-  return lines;
+  return {
+    mainLines,
+  };
 }

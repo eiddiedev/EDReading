@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
-import { FeaturedArticleExperience } from "@/features/featured/article/FeaturedArticleExperience";
+import { FeaturedArticleExperienceShell } from "@/features/featured/article/FeaturedArticleExperienceShell";
 import { FEATURED_DEMO_ARTICLES, getFeaturedArticleBySlug } from "@/features/featured/content";
+
+export const dynamicParams = false;
 
 export function generateStaticParams() {
   return FEATURED_DEMO_ARTICLES.map((article) => ({
@@ -20,5 +22,5 @@ export default async function FeaturedArticlePage({
     notFound();
   }
 
-  return <FeaturedArticleExperience article={article} />;
+  return <FeaturedArticleExperienceShell article={article} />;
 }

@@ -24,19 +24,63 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+.featured-production-page {
+  position: relative;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(217, 119, 6, 0.2), transparent 28%),
+    radial-gradient(circle at 72% 10%, rgba(59, 130, 246, 0.17), transparent 30%),
+    radial-gradient(circle at 50% 72%, rgba(124, 58, 237, 0.16), transparent 34%),
+    linear-gradient(180deg, #05060d 0%, #03040a 54%, #080605 100%);
+  isolation: isolate;
+}
+
 .pretext-app {
   position: relative;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 62%, rgba(124, 89, 44, 0.14), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 15%),
-    #000;
+    radial-gradient(circle at 50% 62%, rgba(124, 89, 44, 0.16), transparent 24%),
+    radial-gradient(circle at 68% 24%, rgba(65, 93, 155, 0.13), transparent 28%),
+    radial-gradient(circle at 18% 18%, rgba(136, 91, 52, 0.1), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 15%),
+    #020204;
   isolation: isolate;
   user-select: none;
   cursor: grab;
   touch-action: none;
+}
+
+.pretext-app::before,
+.pretext-app::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pretext-app::before {
+  background-image:
+    radial-gradient(circle, rgba(255, 249, 233, 0.72) 0 1px, transparent 1.4px),
+    radial-gradient(circle, rgba(169, 191, 255, 0.5) 0 1px, transparent 1.5px),
+    radial-gradient(circle, rgba(255, 212, 158, 0.4) 0 1px, transparent 1.8px);
+  background-position: 0 0, 42px 70px, 120px 28px;
+  background-size: 180px 180px, 260px 260px, 340px 340px;
+  opacity: 0.5;
+  transform: translate3d(0, 0, 0);
+  animation: pretext-star-drift 44s linear infinite;
+}
+
+.pretext-app::after {
+  background:
+    radial-gradient(ellipse at 56% 58%, rgba(216, 139, 73, 0.18), transparent 34%),
+    radial-gradient(ellipse at 42% 34%, rgba(92, 117, 195, 0.13), transparent 30%),
+    radial-gradient(ellipse at 76% 76%, rgba(214, 192, 151, 0.09), transparent 26%);
+  filter: blur(18px);
+  opacity: 0.68;
+  mix-blend-mode: screen;
+  animation: pretext-nebula-breathe 12s ease-in-out infinite alternate;
 }
 
 .pretext-app.is-dragging {
@@ -49,6 +93,10 @@ body {
   inset: 0;
 }
 
+.pretext-scene-layer {
+  z-index: 1;
+}
+
 .pretext-scene-layer canvas {
   display: block;
   width: 100%;
@@ -57,6 +105,7 @@ body {
 
 .pretext-copy-layer {
   pointer-events: none;
+  z-index: 2;
 }
 
 .pretext-copy-line {
@@ -109,6 +158,35 @@ body {
 @media (max-width: 980px) {
   .pretext-copy-line {
     font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pretext-app::before,
+  .pretext-app::after {
+    animation: none;
+  }
+}
+
+@keyframes pretext-star-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(-90px, 72px, 0);
+  }
+}
+
+@keyframes pretext-nebula-breathe {
+  from {
+    transform: scale(1) rotate(-1deg);
+    opacity: 0.52;
+  }
+
+  to {
+    transform: scale(1.06) rotate(1deg);
+    opacity: 0.75;
   }
 }
 

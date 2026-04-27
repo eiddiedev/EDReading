@@ -3,6 +3,7 @@
  */
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { Article } from "@/types";
 import { BookOpen, Trash2, Check, GraduationCap, Plus } from "lucide-react";
@@ -44,7 +45,7 @@ const difficultyLabels: Record<string, string> = {
   Advanced: "高级",
 };
 
-export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggleRead, onAdd, onClick }: ArticleCardProps) {
+export const ArticleCard = memo(function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggleRead, onAdd, onClick }: ArticleCardProps) {
   // 如果数据库里的 difficulty 是新标签，就用新的颜色；否则用默认紫
   const difficultyColor = difficultyColors[article.difficulty] || "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400";
   const difficultyLabel = difficultyLabels[article.difficulty] || article.difficulty;
@@ -190,4 +191,4 @@ export function ArticleCard({ article, onDelete, onAdminDelete, onRead, onToggle
       </Link>
     </div>
   );
-}
+});

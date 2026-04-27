@@ -7,8 +7,6 @@
  * 2. 使用 `jsdom` 和 `@mozilla/readability` 解析 HTML，提取正文、标题和纯文本。
  * 3. 返回清洗后的文章数据。
  */
-import { JSDOM } from 'jsdom';
-import { Readability } from '@mozilla/readability';
 import { NextResponse } from 'next/server';
 
 /**
@@ -22,6 +20,10 @@ import { NextResponse } from 'next/server';
  */
 export async function POST(req: Request) {
   try {
+    const [{ JSDOM }, { Readability }] = await Promise.all([
+      import("jsdom"),
+      import("@mozilla/readability"),
+    ]);
     const { url } = await req.json();
 
     if (!url) {

@@ -17,11 +17,11 @@ import phrasesData from "../lib/phrases-data.json";
 import { DictionaryModal } from "./DictionaryModal";
 import { WordCardModal } from "./WordCardModal";
 import { useAppStore } from "@/lib/store";
-import { Sparkles, Loader2, X, BookOpen, GraduationCap } from "lucide-react";
+import { Sparkles, X, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { triggerHaptic } from "@/lib/utils";
 import { readStreamedJson } from "@/lib/stream-client";
-import { getSentenceAnalysisPreview } from "@/lib/stream-preview";
+import { SentenceAnalysisResult } from "./SentenceAnalysisResult";
 
 // ... (接口定义保持不变)
 interface ImmersiveReaderProps {
@@ -198,7 +198,6 @@ export function ImmersiveReader({
 
   const remainingSentence = Math.max(0, 15 - dailyUsage.sentenceAnalysisCount);
   const isSentenceSelection = Boolean(selectedText && selectedText.includes(" "));
-  const analysisPreview = getSentenceAnalysisPreview(analysisStreamText);
 
   const normalizePhrase = useCallback(
     (phrase: string) =>
@@ -914,102 +913,10 @@ useEffect(() => {
               )}
 
               {isAnalyzing && (
-                <div className="space-y-4 py-4">
-                   <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-medium animate-pulse">
-                      <Loader2 className="animate-spin" />
-                      分析中...
-                   </div>
-                   {analysisPreview ? (
-                      <div className="space-y-5">
-                        {analysisPreview.translation && (
-                          <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900/30">
-                            <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">中文翻译</h4>
-                            <p className="text-lg text-slate-800 dark:text-slate-200">
-                              {analysisPreview.translation}
-                            </p>
-                          </div>
-                        )}
-
-                        {(analysisPreview.structure || analysisPreview.grammarExplanation) && (
-                          <div>
-                            <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
-                              <GraduationCap size={16} />
-                              语法解析
-                            </h4>
-                            {analysisPreview.structure && (
-                              <div className="flex flex-wrap gap-2 mb-4 text-sm">
-                                {analysisPreview.structure.subject && (
-                                  <span className="px-2 py-1 rounded bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">
-                                    <b>S:</b> {analysisPreview.structure.subject}
-                                  </span>
-                                )}
-                                {analysisPreview.structure.verb && (
-                                  <span className="px-2 py-1 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
-                                    <b>V:</b> {analysisPreview.structure.verb}
-                                  </span>
-                                )}
-                                {analysisPreview.structure.object && (
-                                  <span className="px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                    <b>O:</b> {analysisPreview.structure.object}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            {analysisPreview.grammarExplanation && (
-                              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
-                                {analysisPreview.grammarExplanation}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {analysisPreview.vocabulary && analysisPreview.vocabulary.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重点词汇</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {analysisPreview.vocabulary.map((w: string) => (
-                                <span key={w} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm rounded-md border border-slate-200 dark:border-slate-700">
-                                  {w}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {analysisPreview.importantPhrases && analysisPreview.importantPhrases.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重要短语与地道表达</h4>
-                            <div className="space-y-3">
-                              {analysisPreview.importantPhrases.map((item, index) => (
-                                <div key={`${item.phrase || "phrase"}-${index}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-                                  {item.phrase && (
-                                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                      {item.phrase}
-                                    </p>
-                                  )}
-                                  {item.localExpression && (
-                                    <p className="mt-1 text-sm text-primary-600 dark:text-primary-400">
-                                      地道表达：{item.localExpression}
-                                    </p>
-                                  )}
-                                  {item.explanation && (
-                                    <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
-                                      {item.explanation}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                   ) : (
-                      <div className="space-y-2">
-                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-3/4 animate-pulse" />
-                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/2 animate-pulse" />
-                      </div>
-                   )}
-                </div>
+                <SentenceAnalysisResult
+                  streamText={analysisStreamText}
+                  isLoading={isAnalyzing}
+                />
               )}
 
               {analysisResult && (
@@ -1060,84 +967,10 @@ useEffect(() => {
                        </button>
                     </div>
                   ) : (
-                    // Sentence Result
-                    <div className="space-y-5">
-                       {/* Translation */}
-                       <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900/30">
-                          <h4 className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">中文翻译</h4>
-                          <p className="text-lg text-slate-800 dark:text-slate-200">
-                             {analysisResult.data.translation}
-                          </p>
-                       </div>
-
-                       {/* Grammar Analysis */}
-                       <div>
-                          <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
-                             <GraduationCap size={16} />
-                             语法解析
-                          </h4>
-                          
-                          {/* SVO Structure if available */}
-                          {analysisResult.data.structure && (
-                             <div className="flex flex-wrap gap-2 mb-4 text-sm">
-                                <span className="px-2 py-1 rounded bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">
-                                   <b>S:</b> {analysisResult.data.structure.subject}
-                                </span>
-                                <span className="px-2 py-1 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
-                                   <b>V:</b> {analysisResult.data.structure.verb}
-                                </span>
-                                <span className="px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                   <b>O:</b> {analysisResult.data.structure.object}
-                                </span>
-                             </div>
-                          )}
-
-                          <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
-                             {analysisResult.data.grammarExplanation}
-                          </p>
-                       </div>
-
-                       {/* Vocabulary */}
-                       {analysisResult.data.vocabulary && analysisResult.data.vocabulary.length > 0 && (
-                          <div>
-                             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重点词汇</h4>
-                             <div className="flex flex-wrap gap-2">
-                                {analysisResult.data.vocabulary.map((w: string) => (
-                                   <span key={w} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm rounded-md border border-slate-200 dark:border-slate-700">
-                                      {w}
-                                   </span>
-                                ))}
-                             </div>
-                          </div>
-                       )}
-
-                       {analysisResult.data.importantPhrases && analysisResult.data.importantPhrases.length > 0 && (
-                          <div>
-                             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">重要短语与地道表达</h4>
-                             <div className="space-y-3">
-                                {analysisResult.data.importantPhrases.map((item: any, index: number) => (
-                                   <div key={`${item.phrase || "phrase"}-${index}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-                                      {item.phrase && (
-                                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                          {item.phrase}
-                                        </p>
-                                      )}
-                                      {item.localExpression && (
-                                        <p className="mt-1 text-sm text-primary-600 dark:text-primary-400">
-                                          地道表达：{item.localExpression}
-                                        </p>
-                                      )}
-                                      {item.explanation && (
-                                        <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
-                                          {item.explanation}
-                                        </p>
-                                      )}
-                                   </div>
-                                ))}
-                             </div>
-                          </div>
-                       )}
-                    </div>
+                    <SentenceAnalysisResult
+                      result={analysisResult.data}
+                      isLoading={isAnalyzing}
+                    />
                   )}
                 </div>
               )}

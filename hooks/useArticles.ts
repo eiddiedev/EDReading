@@ -37,17 +37,21 @@ export function useArticles({ pageSize = 20, initialPage = 1, initialCount }: Us
     try {
       setIsLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session?.user) {
         setIsLoading(false);
         return;
       }
 
+      const currentState = useAppStore.getState();
+      const currentArticles = currentState.pagedArticles;
+      const currentHasMore = currentState.pagedHasMore;
+      const currentPage = currentState.pagedPage;
+
       // Calculate range
       let from: number, to: number;
-      
+
       if (overrideLimit) {
-          // Special case for restoration: fetch 0 to overrideLimit - 1
           from = 0;
           to = overrideLimit - 1;
       } else {
@@ -77,52 +81,37 @@ export function useArticles({ pageSize = 20, initialPage = 1, initialCount }: Us
         isRead: item.is_read || false,
       }));
 
-      // Update Store
-      let newArticles = articles;
-      let newHasMore = hasMore;
-      let newPage = page;
+      let newArticles = currentArticles;
+      let newHasMore = currentHasMore;
+      let newPage = currentPage;
 
       // Preserve local-only articles when merging with cloud data
-      const localOnlyArticles = articles.filter(a => a.is_local_only);
+      const localOnlyArticles = currentArticles.filter((a: Article) => a.is_local_only);
 
       if (overrideLimit) {
-        // If overriding, we replace all articles (but keep local-only)
         const cloudIds = new Set(normalizedArticles.map((a: Article) => a.id));
-        const keptLocal = localOnlyArticles.filter(a => !cloudIds.has(a.id));
+        const keptLocal = localOnlyArticles.filter((a: Article) => !cloudIds.has(a.id));
         newArticles = [...keptLocal, ...normalizedArticles];
-        // Update page based on limit
         newPage = Math.ceil(overrideLimit / pageSize);
       } else if (isRefresh || targetPage === 1) {
-        // Refresh: keep local-only articles that don't exist in cloud
         const cloudIds = new Set(normalizedArticles.map((a: Article) => a.id));
-        const keptLocal = localOnlyArticles.filter(a => !cloudIds.has(a.id));
+        const keptLocal = localOnlyArticles.filter((a: Article) => !cloudIds.has(a.id));
         newArticles = [...keptLocal, ...normalizedArticles];
         newPage = 1;
       } else {
-        // Dedup based on ID
         const newIds = new Set(normalizedArticles.map((a: Article) => a.id));
-        const filteredPrev = articles.filter(a => !newIds.has(a.id));
+        const filteredPrev = currentArticles.filter((a: Article) => !newIds.has(a.id));
         newArticles = [...filteredPrev, ...normalizedArticles];
         newPage = targetPage;
       }
 
-      // Check if we have more
       const currentFetchCount = data?.length || 0;
-      // If overrideLimit, we check if total matches request
       if (overrideLimit) {
-          if (currentFetchCount < overrideLimit) {
-              newHasMore = false;
-          } else {
-              newHasMore = true;
-          }
+          newHasMore = currentFetchCount >= overrideLimit;
       } else {
-          if (currentFetchCount < pageSize) {
-            newHasMore = false;
-          } else {
-            newHasMore = true;
-          }
+          newHasMore = currentFetchCount >= pageSize;
       }
-      
+
       setPagedState(newArticles, newHasMore, newPage);
 
     } catch (error) {
@@ -131,7 +120,7 @@ export function useArticles({ pageSize = 20, initialPage = 1, initialCount }: Us
     } finally {
       setIsLoading(false);
     }
-  }, [pageSize, articles, hasMore, page, setPagedState]);
+  }, [pageSize, setPagedState]);
 
   // Restore local articles from IndexedDB on initial load
   const restoreLocalArticles = useCallback(async () => {

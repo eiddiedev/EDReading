@@ -179,25 +179,18 @@ export default function LibraryPage() {
 
   useEffect(() => {
     if (!isMounted) return;
-    const updateGeneratingIds = () => {
-
-      const stored = JSON.parse(localStorage.getItem("generating_article_ids") || "[]");
-      if (!isGenerating && stored.length > 0) {
-        localStorage.setItem("generating_article_ids", "[]");
-        setGeneratingIds([]);
-        return;
+    // Restore in-flight generation IDs from a previous navigation (read once on mount)
+    const stored = JSON.parse(localStorage.getItem("generating_article_ids") || "[]");
+    if (stored.length > 0) {
+      const currentArticleIds = new Set(useAppStore.getState().articles.map((a) => a.id));
+      const stillPending = stored.filter((id: string) => !currentArticleIds.has(id));
+      if (stillPending.length > 0) {
+        setGeneratingIds(stillPending);
+      } else {
+        localStorage.removeItem("generating_article_ids");
       }
-      const currentArticles = useAppStore.getState().articles;
-      const cleaned = stored.filter((id: string) => !currentArticles.some((item) => item.id === id));
-      if (cleaned.length !== stored.length) {
-        localStorage.setItem("generating_article_ids", JSON.stringify(cleaned));
-      }
-      setGeneratingIds(cleaned);
-    };
-    updateGeneratingIds();
-    const timer = setInterval(updateGeneratingIds, 1000);
-    return () => clearInterval(timer);
-  }, [isMounted, isGenerating]);
+    }
+  }, [isMounted]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -304,11 +297,19 @@ export default function LibraryPage() {
             is_public: true,
           };
 
-          const storedIds = JSON.parse(localStorage.getItem("generating_article_ids") || "[]");
-          const nextIds = Array.from(new Set([...storedIds, articleId]));
-          localStorage.setItem("generating_article_ids", JSON.stringify(nextIds));
+          setGeneratingIds((prev) => {
+            const next = [...prev, articleId];
+            localStorage.setItem("generating_article_ids", JSON.stringify(next));
+            return next;
+          });
 
           await addArticle(newArticle, true);
+
+          setGeneratingIds((prev) => {
+            const next = prev.filter((id) => id !== articleId);
+            localStorage.setItem("generating_article_ids", JSON.stringify(next));
+            return next;
+          });
 
         } catch (error) {
           // Task 1: Show specific error if storage limit exceeded

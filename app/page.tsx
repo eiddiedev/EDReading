@@ -1,8 +1,8 @@
 /**
- * 应用首页重定向到精选文章页。
+ * 应用首页重定向到文库页。
  */
 import { redirect } from "next/navigation";
 
 export default function Home() {
-  redirect("/featured");
+  redirect("/library");
 }
