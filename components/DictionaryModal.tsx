@@ -163,13 +163,13 @@ export const DictionaryModal = memo(function DictionaryModal({
             if (!disableDrag) dragControls.start(e);
           }}
         >
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-1">
             <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100">
               {displayWord}
             </h2>
-            
+
             {audioUrl && (
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); handlePlayAudio(); }}
                 className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-slate-600 dark:text-slate-300"
                 aria-label="Play pronunciation"
@@ -177,13 +177,13 @@ export const DictionaryModal = memo(function DictionaryModal({
                 <Volume2 className="w-5 h-5" />
               </button>
             )}
-
-            {headerResult?.phonetic && (
-              <span className="text-slate-500 dark:text-slate-400 font-mono text-lg">
-                {headerResult.phonetic}
-              </span>
-            )}
           </div>
+
+          {headerResult?.phonetic && (
+            <span className="text-slate-500 dark:text-slate-400 font-mono text-lg mb-2">
+              {headerResult.phonetic}
+            </span>
+          )}
           
           {headerResult?.tags && headerResult.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">

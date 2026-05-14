@@ -156,9 +156,14 @@ export function ImportModal({ isOpen, onClose, onImport, isLoading, streamPrevie
                       {liveWords.map((item, index) => (
                         <span
                           key={`${item.text || item.word || "word"}-${index}`}
-                          className="px-2 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300"
+                          className="inline-flex flex-col items-center px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                         >
-                          {item.text || item.word}
+                          <span className="text-xs font-medium">{item.text || item.word}</span>
+                          {item.phonetic && (
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
+                              {item.phonetic}
+                            </span>
+                          )}
                         </span>
                       ))}
                     </div>

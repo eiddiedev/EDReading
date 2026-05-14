@@ -339,14 +339,14 @@ export default function NotebookPage() {
                   >
                     <div className="flex items-center justify-between mb-2">
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
                             {word.word}
-                            {word.phonetic && (
-                                <span className="text-slate-500 dark:text-slate-400 text-sm font-normal font-mono">
-                                {word.phonetic}
-                                </span>
-                            )}
                           </h3>
+                          {word.phonetic && (
+                            <span className="text-slate-500 dark:text-slate-400 text-sm font-mono">
+                              {word.phonetic}
+                            </span>
+                          )}
                         </div>
                         <button
                           onClick={() => removeVocabulary(word.id)}

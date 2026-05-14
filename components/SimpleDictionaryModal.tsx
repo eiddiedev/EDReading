@@ -92,7 +92,7 @@ export const SimpleDictionaryModal = memo(function SimpleDictionaryModal({
           {previewResult ? (
             <div className="space-y-4">
               {liveResult.word && (
-                <div className="flex items-baseline gap-3">
+                <div>
                   <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100">
                     {liveResult.word}
                   </h2>
@@ -141,7 +141,7 @@ export const SimpleDictionaryModal = memo(function SimpleDictionaryModal({
       <>
         {/* 单词头部 */}
         <div className="mb-6">
-          <div className="flex items-baseline gap-3 mb-2">
+          <div className="mb-2">
             <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100">
               {result.word}
             </h2>
