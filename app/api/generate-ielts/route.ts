@@ -45,6 +45,12 @@ type ArticlePayload = {
   sentences?: unknown[];
 };
 
+type ValidationResult = {
+  isValid: boolean;
+  issues: string[];
+  wordCount: number;
+};
+
 const TOPIC_META: Record<string, TopicMeta> = {
   tech: {
     broadTag: "Technology",
@@ -106,7 +112,7 @@ const TOPIC_META: Record<string, TopicMeta> = {
 
 const MAX_TOPIC_HISTORY = 20;
 const MAX_SUBTOPIC_CANDIDATES = 5;
-const MAX_REWRITE_ATTEMPTS = 1;
+const MAX_REWRITE_ATTEMPTS = 2;
 
 const normalizeCompareText = (value: string) =>
   value
@@ -443,7 +449,85 @@ function validateArticlePayload(article: ArticlePayload, targetLength: string) {
     isValid: issues.length === 0,
     issues,
     wordCount,
-  };
+  } satisfies ValidationResult;
+}
+
+function getSoftWordCountMargin(targetLength: string) {
+  const { min, max } = parseLengthRange(targetLength);
+  const spread = Math.max(max - min, 0);
+  return Math.min(60, Math.max(20, Math.round(spread * 0.18)));
+}
+
+function normalizeArticlePayload({
+  article,
+  level,
+  specificTopic,
+  broadTag,
+}: {
+  article: ArticlePayload;
+  level: string;
+  specificTopic: string;
+  broadTag: string;
+}) {
+  const normalizedContent = typeof article.content === "string" ? article.content.trim() : "";
+  const normalizedTitle =
+    typeof article.title === "string" && article.title.trim().length > 0 ? article.title.trim() : specificTopic;
+
+  return {
+    ...article,
+    title: normalizedTitle,
+    content: normalizedContent,
+    difficulty: level,
+    level,
+    topic: specificTopic,
+    tags: enrichTags(article.tags, broadTag),
+  } satisfies ArticlePayload;
+}
+
+function isSoftValidArticlePayload(article: ArticlePayload, targetLength: string) {
+  const validation = validateArticlePayload(article, targetLength);
+  if (validation.isValid) return true;
+
+  const { min, max } = parseLengthRange(targetLength);
+  const margin = getSoftWordCountMargin(targetLength);
+
+  return (
+    validation.issues.every((issue) => issue.startsWith("word count")) &&
+    validation.wordCount >= Math.max(1, min - margin) &&
+    validation.wordCount <= max + margin
+  );
+}
+
+function scoreArticlePayload(article: ArticlePayload, targetLength: string) {
+  const validation = validateArticlePayload(article, targetLength);
+  const { min, max } = parseLengthRange(targetLength);
+  const midpoint = (min + max) / 2;
+
+  let penalty = 0;
+
+  if (!article.title?.trim()) penalty += 2000;
+  if (!article.content?.trim()) penalty += 5000;
+  if (!article.tags || article.tags.length === 0) penalty += 500;
+
+  if (validation.wordCount < min) {
+    penalty += (min - validation.wordCount) * 3;
+  } else if (validation.wordCount > max) {
+    penalty += (validation.wordCount - max) * 3;
+  } else {
+    penalty += Math.abs(validation.wordCount - midpoint) * 0.2;
+  }
+
+  penalty += validation.issues.length * 100;
+  return penalty;
+}
+
+function chooseBestArticlePayload(candidates: ArticlePayload[], targetLength: string) {
+  const viable = candidates.filter((candidate) => candidate.content?.trim());
+  if (viable.length === 0) return null;
+
+  return [...viable].sort((left, right) => {
+    return scoreArticlePayload(left, targetLength) - scoreArticlePayload(right, targetLength);
+  })[0];
 }
 
 async function repairArticlePayload({
@@ -678,13 +762,24 @@ Return strict JSON:
       upstream: reviewResponse,
       parse: (raw) => parseJsonCompletion<ArticlePayload>(raw),
       onDone: async (aiResult) => {
-        let finalized = {
-          ...aiResult,
-          difficulty: level,
-          level,
-          topic: specificTopic,
-          tags: enrichTags(aiResult.tags, topicMeta?.broadTag || "General"),
-        } satisfies ArticlePayload;
+        const broadTag = topicMeta?.broadTag || "General";
+        const articleCandidates: ArticlePayload[] = [];
+        const pushCandidate = (candidate: ArticlePayload | null | undefined) => {
+          if (!candidate) return;
+          articleCandidates.push(
+            normalizeArticlePayload({
+              article: candidate,
+              level,
+              specificTopic,
+              broadTag,
+            })
+          );
+        };
+
+        pushCandidate(draftArticle);
+        pushCandidate(aiResult);
+
+        let finalized = articleCandidates[articleCandidates.length - 1];
 
         let validation = validateArticlePayload(finalized, targetLength);
 
@@ -702,18 +797,40 @@ Return strict JSON:
             issues: validation.issues,
           });
 
-          finalized = {
-            ...repaired,
-            difficulty: level,
-            level,
-            topic: specificTopic,
-            tags: enrichTags(repaired.tags, topicMeta?.broadTag || "General"),
-          };
+          pushCandidate(repaired);
+          finalized = articleCandidates[articleCandidates.length - 1];
           validation = validateArticlePayload(finalized, targetLength);
         }
 
         if (!validation.isValid) {
-          throw new Error(`生成文章未通过质量校验: ${validation.issues.join(", ")}`);
+          const softAccepted = articleCandidates.find((candidate) =>
+            isSoftValidArticlePayload(candidate, targetLength)
+          );
+
+          if (softAccepted) {
+            finalized = softAccepted;
+            validation = validateArticlePayload(finalized, targetLength);
+            console.warn("Accepted softly validated article:", {
+              topic: specificTopic,
+              level,
+              issues: validation.issues,
+              wordCount: validation.wordCount,
+            });
+          } else {
+            const bestCandidate = chooseBestArticlePayload(articleCandidates, targetLength);
+            if (!bestCandidate) {
+              throw new Error(`生成文章未通过质量校验: ${validation.issues.join(", ")}`);
+            }
+
+            finalized = bestCandidate;
+            validation = validateArticlePayload(finalized, targetLength);
+            console.warn("Falling back to best available generated article:", {
+              topic: specificTopic,
+              level,
+              issues: validation.issues,
+              wordCount: validation.wordCount,
+            });
+          }
         }
 
         const normalizedContent = typeof finalized.content === "string" ? finalized.content.trim() : "";
@@ -723,7 +840,7 @@ Return strict JSON:
         }
 
         const wordCount = countWords(normalizedContent);
-        const tags = enrichTags(finalized.tags, topicMeta?.broadTag || "General");
+        const tags = enrichTags(finalized.tags, broadTag);
 
         const finalArticleData = {
           id: crypto.randomUUID(),
