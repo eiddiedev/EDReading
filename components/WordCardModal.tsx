@@ -18,6 +18,7 @@ import { DictionaryResult } from "@/types";
 import { triggerHaptic } from "@/lib/utils";
 import { readStreamedJson } from "@/lib/stream-client";
 import { getCardPreview } from "@/lib/stream-preview";
+import { useChineseDisplayPreference } from "@/lib/chinese-display-preference";
 
 interface WordCardModalProps {
   isOpen: boolean;
@@ -30,21 +31,13 @@ interface CardGenResult {
   translation: string;
 }
 
-const WORD_CARD_SHOW_CHINESE_KEY = "word-card-show-chinese-v1";
-
 export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [cardContent, setCardContent] = useState<CardGenResult | null>(null);
   const [streamPreview, setStreamPreview] = useState("");
-  const [showChinese, setShowChinese] = useState(true);
+  const { showChinese, toggleShowChinese } = useChineseDisplayPreference();
   const cardRef = useRef<HTMLDivElement>(null);
   const partialCard = getCardPreview(streamPreview);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedPreference = window.localStorage.getItem(WORD_CARD_SHOW_CHINESE_KEY);
-    setShowChinese(storedPreference !== "0");
-  }, []);
 
   const generateCardContent = useCallback(async () => {
     if (!wordData) return;
@@ -87,13 +80,7 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
   }, [isOpen, wordData, generateCardContent]);
 
   const handleToggleChinese = () => {
-    setShowChinese((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(WORD_CARD_SHOW_CHINESE_KEY, next ? "1" : "0");
-      }
-      return next;
-    });
+    toggleShowChinese();
   };
 
   const handleDownload = async () => {

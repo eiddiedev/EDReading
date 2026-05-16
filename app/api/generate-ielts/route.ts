@@ -1,72 +1,517 @@
 /**
- * 生成雅思/托福阅读文章的 API 路由，根据用户选择的主题和难度，利用 AI 生成符合考试标准的学术文章，包含智能选题和缓存机制。
+ * 生成阅读文章的 API 路由，根据用户选择的主题和难度，利用 AI 生成更灵活、更高质量的文章。
  */
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { checkContentSafety } from '@/lib/safety';
-import { pickMandatoryKeywords } from '@/lib/vocab-utils';
-import { parseJsonCompletion, streamOpenAIResponse } from '@/lib/ai-stream';
-import { formatQualityRules, getReadingLevel, normalizeReadingLevelId } from '@/lib/reading-levels';
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { checkContentSafety } from "@/lib/safety";
+import { countWords, pickMandatoryKeywords } from "@/lib/vocab-utils";
+import { parseJsonCompletion, streamOpenAIResponse } from "@/lib/ai-stream";
+import { formatQualityRules, getReadingLevel, normalizeReadingLevelId } from "@/lib/reading-levels";
 
-// --- 配置区域 ---
+type TopicMeta = {
+  broadTag: string;
+  label: string;
+  fallbackAngles: string[];
+};
 
-// 1. 定义细分角度池 (Sub-topic Roulette)
-// 解决“千篇一律”的核心：每次生成都强制从这里随机选一个具体切入点
-const TOPIC_ANGLES: Record<string, string[]> = {
-  'tech': [
-    "The Ethics of Artificial Intelligence in Healthcare",
-    "Space Debris: The Hidden Danger Orbiting Earth",
-    "Quantum Computing: A New Era of Processing Power",
-    "The Impact of 5G on Global Communication",
-    "Biometrics and Privacy in the Digital Age",
-    "Autonomous Vehicles: Legal and Moral Dilemmas"
-  ],
-  'env': [
-    "Microplastics in the Ocean Ecosystem",
-    "Urban Vertical Farming as a Sustainability Solution",
-    "The Economic Impact of Carbon Tax Policies",
-    "Renewable Energy Storage Challenges",
-    "Biodiversity Loss and Its Effect on Agriculture"
-  ],
-  'edu': [
-    "The Shift from Rote Learning to Critical Thinking",
-    "Gamification in Modern Classrooms",
-    "The Psychological Effects of Remote Learning",
-    "Lifelong Learning in a Gig Economy",
-    "Standardized Testing: Pros and Cons"
-  ],
-  'soc': [
-    "The Gig Economy and Worker Rights",
-    "Urbanization and Mental Health",
-    "The Role of Social Media in Political Polarization",
-    "Aging Populations and Economic Strain",
-    "Cultural Homogenization in a Globalized World"
-  ],
-  'cul': [
-    "Preserving Indigenous Languages via Technology",
-    "The Evolution of Street Art",
-    "Minimalism vs. Consumerism",
-    "The Influence of Streaming Services on Cinema",
-    "Traditional Architecture in Modern Cities"
+type RecentArticle = {
+  title?: string | null;
+  topic?: string | null;
+  tags?: string[] | null;
+  created_at?: string | null;
+};
+
+type SubtopicCandidate = {
+  subtopic: string;
+  focus: string;
+  keywords: string[];
+  why_it_is_distinct: string;
+  outline: string[];
+};
+
+type PlanningResult = {
+  candidates: SubtopicCandidate[];
+};
+
+type ArticlePayload = {
+  title?: string;
+  title_zh?: string;
+  content?: string;
+  difficulty?: string;
+  level?: string;
+  topic?: string;
+  tags?: string[];
+  vocabulary?: unknown[];
+  sentences?: unknown[];
+};
+
+const TOPIC_META: Record<string, TopicMeta> = {
+  tech: {
+    broadTag: "Technology",
+    label: "Technology and Future",
+    fallbackAngles: [
+      "The Ethics of Artificial Intelligence in Healthcare",
+      "Space Debris: The Hidden Danger Orbiting Earth",
+      "Quantum Computing: A New Era of Processing Power",
+      "The Impact of 5G on Global Communication",
+      "Biometrics and Privacy in the Digital Age",
+      "Autonomous Vehicles: Legal and Moral Dilemmas",
+    ],
+  },
+  env: {
+    broadTag: "Environment",
+    label: "Environment and Nature",
+    fallbackAngles: [
+      "Microplastics in the Ocean Ecosystem",
+      "Urban Vertical Farming as a Sustainability Solution",
+      "The Economic Impact of Carbon Tax Policies",
+      "Renewable Energy Storage Challenges",
+      "Biodiversity Loss and Its Effect on Agriculture",
+    ],
+  },
+  edu: {
+    broadTag: "Education",
+    label: "Education and Growth",
+    fallbackAngles: [
+      "The Shift from Rote Learning to Critical Thinking",
+      "Gamification in Modern Classrooms",
+      "The Psychological Effects of Remote Learning",
+      "Lifelong Learning in a Gig Economy",
+      "Standardized Testing: Pros and Cons",
+    ],
+  },
+  soc: {
+    broadTag: "Society",
+    label: "Society and Modern Life",
+    fallbackAngles: [
+      "The Gig Economy and Worker Rights",
+      "Urbanization and Mental Health",
+      "The Role of Social Media in Political Polarization",
+      "Aging Populations and Economic Strain",
+      "Cultural Homogenization in a Globalized World",
+    ],
+  },
+  cul: {
+    broadTag: "Culture",
+    label: "Culture and Arts",
+    fallbackAngles: [
+      "Preserving Indigenous Languages via Technology",
+      "The Evolution of Street Art",
+      "Minimalism vs. Consumerism",
+      "The Influence of Streaming Services on Cinema",
+      "Traditional Architecture in Modern Cities",
+    ],
+  },
+};
+
+const MAX_TOPIC_HISTORY = 20;
+const MAX_SUBTOPIC_CANDIDATES = 5;
+const MAX_REWRITE_ATTEMPTS = 1;
+
+const normalizeCompareText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const tokenizeCompareText = (value: string) =>
+  normalizeCompareText(value)
+    .split(" ")
+    .filter((token) => token.length >= 4);
+
+const parseLengthRange = (range: string) => {
+  const matched = range.match(/(\d+)\s*-\s*(\d+)/);
+  if (!matched) return { min: 0, max: Number.MAX_SAFE_INTEGER };
+  return { min: Number(matched[1]), max: Number(matched[2]) };
+};
+
+const dedupeStrings = (items: string[]) => Array.from(new Set(items.filter(Boolean)));
+
+const enrichTags = (tags: string[] | undefined, broadTag: string) =>
+  dedupeStrings([...(tags || []), broadTag]).slice(0, 5);
+
+const extractRecentReferences = (articles: RecentArticle[]) =>
+  articles
+    .map((article) =>
+      [article.title, article.topic, ...(article.tags || [])]
+        .filter(Boolean)
+        .join(" | ")
+    )
+    .filter(Boolean);
+
+const similarityScore = (left: string, right: string) => {
+  const normalizedLeft = normalizeCompareText(left);
+  const normalizedRight = normalizeCompareText(right);
+  if (!normalizedLeft || !normalizedRight) return 0;
+  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) {
+    return 1;
+  }
+
+  const leftTokens = new Set(tokenizeCompareText(left));
+  const rightTokens = new Set(tokenizeCompareText(right));
+  if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+
+  let overlap = 0;
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) overlap += 1;
+  });
+
+  const unionSize = new Set([...leftTokens, ...rightTokens]).size;
+  return unionSize === 0 ? 0 : overlap / unionSize;
+};
+
+const isCandidateTooSimilar = (candidate: string, recentReferences: string[]) =>
+  recentReferences.some((reference) => similarityScore(candidate, reference) >= 0.45);
+
+const buildFallbackCandidate = (
+  topicPrompt: string,
+  topicMeta: TopicMeta | undefined,
+  recentReferences: string[]
+): SubtopicCandidate => {
+  const fallbackAngles = topicMeta?.fallbackAngles || [topicPrompt];
+  const selectedAngle =
+    fallbackAngles.find((angle) => !isCandidateTooSimilar(angle, recentReferences)) || fallbackAngles[0] || topicPrompt;
+
+  return {
+    subtopic: selectedAngle,
+    focus: `Explain the topic with clear progression, concrete examples, and a level-appropriate tone for ${topicMeta?.label || topicPrompt}.`,
+    keywords: [],
+    why_it_is_distinct: "Fallback topic selected because dynamic subtopic planning failed or produced overly similar candidates.",
+    outline: [
+      "Introduce the issue and explain why it matters.",
+      "Describe the main mechanism, process, or conflict with concrete details.",
+      "Discuss implications, trade-offs, or future significance with a clear conclusion.",
+    ],
+  };
+};
+
+const validateCandidate = (candidate: Partial<SubtopicCandidate>): candidate is SubtopicCandidate =>
+  typeof candidate.subtopic === "string" &&
+  candidate.subtopic.trim().length > 8 &&
+  typeof candidate.focus === "string" &&
+  candidate.focus.trim().length > 10 &&
+  Array.isArray(candidate.keywords) &&
+  Array.isArray(candidate.outline) &&
+  candidate.outline.length >= 2;
+
+async function requestJsonCompletion<T>({
+  apiKey,
+  baseUrl,
+  messages,
+  temperature = 0.7,
+}: {
+  apiKey: string;
+  baseUrl: string;
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  temperature?: number;
+}) {
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "deepseek-chat",
+      messages,
+      temperature,
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`AI API Error: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content !== "string") {
+    throw new Error("AI JSON completion missing message content");
+  }
+
+  return parseJsonCompletion<T>(content);
+}
+
+async function fetchRecentArticlesForTopic({
+  supabase,
+  level,
+  broadTag,
+}: {
+  supabase: any;
+  level: string;
+  broadTag?: string;
+}) {
+  let query = supabase
+    .from("articles")
+    .select("title, topic, tags, created_at")
+    .eq("difficulty", level)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false })
+    .limit(MAX_TOPIC_HISTORY);
+
+  if (broadTag) {
+    query = query.contains("tags", [broadTag]);
+  }
+
+  const { data } = await query;
+  return (data || []) as RecentArticle[];
+}
+
+function selectSubtopicCandidate(
+  candidates: SubtopicCandidate[],
+  recentReferences: string[],
+  fallbackCandidate: SubtopicCandidate
+) {
+  const selected =
+    candidates.find((candidate) => !isCandidateTooSimilar(candidate.subtopic, recentReferences)) || fallbackCandidate;
+
+  return {
+    selected,
+    usedFallback: selected.subtopic === fallbackCandidate.subtopic,
+  };
+}
+
+async function buildSubtopicPlan({
+  apiKey,
+  baseUrl,
+  topicPrompt,
+  topicMeta,
+  levelLabel,
+  levelGuide,
+  recentReferences,
+}: {
+  apiKey: string;
+  baseUrl: string;
+  topicPrompt: string;
+  topicMeta?: TopicMeta;
+  levelLabel: string;
+  levelGuide: string;
+  recentReferences: string[];
+}) {
+  const avoidBlock =
+    recentReferences.length > 0
+      ? recentReferences.slice(0, MAX_TOPIC_HISTORY).map((item, index) => `${index + 1}. ${item}`).join("\n")
+      : "None";
+
+  const planning = await requestJsonCompletion<PlanningResult>({
+    apiKey,
+    baseUrl,
+    temperature: 1.05,
+    messages: [
+      {
+        role: "system",
+        content: `You are a creative English exam reading planner.
+
+Your job is to propose exactly ${MAX_SUBTOPIC_CANDIDATES} DISTINCT subtopics for a reading passage.
+
+Rules:
+1. All subtopics must stay under the broad theme the user selected.
+2. They must be fresh, concrete, and suitable for ${levelLabel}.
+3. Avoid topics that are too close to the "avoid similar to" list.
+4. Each candidate must feel different in angle, not just wording.
+5. Return strict JSON only.
+
+Output JSON:
+{
+  "candidates": [
+    {
+      "subtopic": "Specific angle title",
+      "focus": "What the passage should mainly explain or argue",
+      "keywords": ["keyword1", "keyword2", "keyword3"],
+      "why_it_is_distinct": "Why this angle differs from common passages",
+      "outline": ["Paragraph goal 1", "Paragraph goal 2", "Paragraph goal 3"]
+    }
   ]
-};
+}`,
+      },
+      {
+        role: "user",
+        content: `Broad topic: ${topicMeta?.label || topicPrompt}
+User prompt: ${topicPrompt}
+Broad tag to keep in final article tags: ${topicMeta?.broadTag || "General"}
+Target level: ${levelLabel}
+Level guide: ${levelGuide}
 
-const countWords = (input: string) => {
-  const normalized = input.trim();
-  if (!normalized) return 0;
-  return normalized.split(/\s+/).length;
-};
-/**
- * 根据主题和难度等级生成新的阅读文章。
- * 
- * @route POST /api/generate-ielts
- * @param {object} req.body
- * @param {string} req.body.topicPrompt - 用户提供的主题或关键词
- * @param {string} [req.body.topicId] - 宽泛的分类 ID (tech, env 等)
- * @param {string} [req.body.level="IELTS"] - 难度等级 (CET-4, IELTS 等)
- * @param {string} req.body.userId - 请求用户的 ID
- * @returns {object} 生成的文章对象 (已保存到数据库)
- */
+Avoid similar to:
+${avoidBlock}
+
+Generate exactly ${MAX_SUBTOPIC_CANDIDATES} candidates now.`,
+      },
+    ],
+  });
+
+  return Array.isArray(planning.candidates)
+    ? planning.candidates.filter(validateCandidate)
+    : [];
+}
+
+async function buildDraftArticle({
+  apiKey,
+  baseUrl,
+  level,
+  levelLabel,
+  levelGuide,
+  targetLength,
+  specificTopic,
+  topicMeta,
+  mandatoryKeywords,
+  qualityRules,
+  selectedCandidate,
+}: {
+  apiKey: string;
+  baseUrl: string;
+  level: string;
+  levelLabel: string;
+  levelGuide: string;
+  targetLength: string;
+  specificTopic: string;
+  topicMeta?: TopicMeta;
+  mandatoryKeywords: string[];
+  qualityRules: string;
+  selectedCandidate: SubtopicCandidate;
+}) {
+  return requestJsonCompletion<ArticlePayload>({
+    apiKey,
+    baseUrl,
+    temperature: 0.92,
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert English exam passage writer.
+
+Write a high-quality reading passage draft that fits the selected exam level.
+
+Hard rules:
+1. JSON only.
+2. Keep the final article within ${targetLength} words.
+3. Follow the target level exactly and avoid generic filler writing.
+4. The article must be coherent, concrete, and naturally paragraph-based.
+5. Return title, title_zh, content, difficulty, level, topic, tags, vocabulary, sentences.`,
+      },
+      {
+        role: "user",
+        content: `Target level: ${levelLabel} (${level})
+Level guide: ${levelGuide}
+Target length: ${targetLength}
+Broad category: ${topicMeta?.label || specificTopic}
+Broad tag: ${topicMeta?.broadTag || "General"}
+Selected subtopic: ${specificTopic}
+Focus: ${selectedCandidate.focus}
+Distinctness note: ${selectedCandidate.why_it_is_distinct}
+Outline:
+${selectedCandidate.outline.map((item, index) => `${index + 1}. ${item}`).join("\n")}
+Suggested keywords from planning: ${selectedCandidate.keywords.join(", ") || "None"}
+Mandatory keywords: ${mandatoryKeywords.join(", ") || "None"}
+
+Quality bar:
+${qualityRules}
+
+Return strict JSON:
+{
+  "title": "English Title",
+  "title_zh": "Chinese Title",
+  "content": "Full article with paragraph breaks",
+  "difficulty": "${level}",
+  "level": "${level}",
+  "topic": "${specificTopic}",
+  "tags": ["${topicMeta?.broadTag || "General"}", "Tag2", "Tag3"],
+  "vocabulary": [],
+  "sentences": []
+}`,
+      },
+    ],
+  });
+}
+
+function validateArticlePayload(article: ArticlePayload, targetLength: string) {
+  const issues: string[] = [];
+  const content = typeof article.content === "string" ? article.content.trim() : "";
+  const title = typeof article.title === "string" ? article.title.trim() : "";
+  const tags = Array.isArray(article.tags) ? article.tags.filter(Boolean) : [];
+  const { min, max } = parseLengthRange(targetLength);
+  const wordCount = countWords(content);
+
+  if (!title) issues.push("missing title");
+  if (!content) issues.push("missing content");
+  if (wordCount < min || wordCount > max) {
+    issues.push(`word count ${wordCount} outside ${targetLength}`);
+  }
+  if (tags.length === 0) issues.push("missing tags");
+
+  return {
+    isValid: issues.length === 0,
+    issues,
+    wordCount,
+  };
+}
+
+async function repairArticlePayload({
+  apiKey,
+  baseUrl,
+  level,
+  levelLabel,
+  targetLength,
+  qualityRules,
+  specificTopic,
+  broadTag,
+  article,
+  issues,
+}: {
+  apiKey: string;
+  baseUrl: string;
+  level: string;
+  levelLabel: string;
+  targetLength: string;
+  qualityRules: string;
+  specificTopic: string;
+  broadTag: string;
+  article: ArticlePayload;
+  issues: string[];
+}) {
+  return requestJsonCompletion<ArticlePayload>({
+    apiKey,
+    baseUrl,
+    temperature: 0.35,
+    messages: [
+      {
+        role: "system",
+        content: `You are a strict English exam passage fixer.
+
+Repair the article JSON so it fully matches the target level and target length.
+Return strict JSON only.`,
+      },
+      {
+        role: "user",
+        content: `Target level: ${levelLabel} (${level})
+Target length: ${targetLength}
+Broad tag: ${broadTag}
+Topic: ${specificTopic}
+Problems to fix: ${issues.join("; ")}
+
+Quality bar:
+${qualityRules}
+
+Current article JSON:
+${JSON.stringify(article)}
+
+Return strict JSON with fields:
+{
+  "title": "English Title",
+  "title_zh": "Chinese Title",
+  "content": "Fixed content",
+  "difficulty": "${level}",
+  "level": "${level}",
+  "topic": "${specificTopic}",
+  "tags": ["${broadTag}", "Tag2", "Tag3"],
+  "vocabulary": [],
+  "sentences": []
+}`,
+      },
+    ],
+  });
+}
+
 export async function POST(req: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -75,18 +520,21 @@ export async function POST(req: Request) {
   const apiKey = process.env.DEEPSEEK_API_KEY || process.env.AI_API_KEY;
   const baseUrl = process.env.AI_BASE_URL || "https://api.deepseek.com";
 
-  if (!apiKey) return NextResponse.json({ error: "Missing API Key" }, { status: 500 });
+  if (!apiKey) {
+    return NextResponse.json({ error: "Missing API Key" }, { status: 500 });
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
-    let { topicPrompt, topicId, level = 'IELTS', userId } = body;
+    let { topicPrompt, topicId, level = "IELTS", userId } = body;
     level = normalizeReadingLevelId(level);
     const levelConfig = getReadingLevel(level);
+    const topicMeta = topicId ? TOPIC_META[topicId] : undefined;
+
     if (!userId) {
       return NextResponse.json({ error: "未登录，无法生成公共文章。" }, { status: 401 });
     }
 
-    // 🛡️ Rate Limiting & Admin Bypass
     const { checkRateLimit } = await import("@/lib/rate-limit");
     const rateLimit = await checkRateLimit(userId, "generate_ielts", 2);
     if (!rateLimit.allowed) {
@@ -98,24 +546,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "输入内容包含敏感信息，无法生成。" }, { status: 400 });
     }
 
-    // --- 2. 智能选题逻辑 (Smart Selection) ---
-    // 如果用户选了大类 (topicId 存在)，我们帮他随机选个细分角度
-    let specificTopic = topicPrompt;
-    if (topicId && TOPIC_ANGLES[topicId]) {
-      const angles = TOPIC_ANGLES[topicId];
-      // 随机选一个角度，让每次生成都不一样
-      const randomAngle = angles[Math.floor(Math.random() * angles.length)];
-      specificTopic = `${randomAngle} (Broad Topic: ${topicPrompt})`;
+    const recentArticles = await fetchRecentArticlesForTopic({
+      supabase,
+      level,
+      broadTag: topicMeta?.broadTag,
+    });
+    const recentReferences = extractRecentReferences(recentArticles);
+    const fallbackCandidate = buildFallbackCandidate(String(topicPrompt || ""), topicMeta, recentReferences);
+
+    let candidates: SubtopicCandidate[] = [];
+    try {
+      candidates = await buildSubtopicPlan({
+        apiKey,
+        baseUrl,
+        topicPrompt: String(topicPrompt || ""),
+        topicMeta,
+        levelLabel: levelConfig.label,
+        levelGuide: levelConfig.generationGuide,
+        recentReferences,
+      });
+    } catch (error) {
+      console.error("Subtopic planning failed, using fallback:", error);
     }
 
-    // --- 3. 查缓存 (Cache First) ---
-    // Key 变了 (specificTopic)，所以用户不会再刷到重复的旧文了
+    const { selected: selectedCandidate } = selectSubtopicCandidate(candidates, recentReferences, fallbackCandidate);
+    const specificTopic = selectedCandidate.subtopic;
+
     const { data: cachedArticle } = await supabase
-      .from('articles')
-      .select('*')
-      .eq('topic', specificTopic) // 注意：这里匹配的是细分主题
-      .eq('difficulty', level)   // 匹配难度
-      .eq('is_public', true)
+      .from("articles")
+      .select("*")
+      .eq("topic", specificTopic)
+      .eq("difficulty", level)
+      .eq("is_public", true)
       .limit(1)
       .single();
 
@@ -123,115 +585,166 @@ export async function POST(req: Request) {
       return NextResponse.json(cachedArticle);
     }
 
-    // --- 4. 生成新文章 (Calling AI) ---
-    const mandatoryKeywords = levelConfig.mandatoryKeywordCount > 0
-      ? pickMandatoryKeywords(topicId || "", levelConfig.mandatoryKeywordCount)
-      : [];
+    const mandatoryKeywords =
+      levelConfig.mandatoryKeywordCount > 0
+        ? pickMandatoryKeywords(topicId || "", levelConfig.mandatoryKeywordCount)
+        : [];
     const targetLength = levelConfig.lengthRange;
     const qualityRules = formatQualityRules(levelConfig);
-    
-    const systemPrompt = `You are an Expert English Exam Content Creator.
-    **Task:** Write a reading passage based on the topic provided.
-    **Topic:** "${specificTopic}"
-    **Target Level:** ${levelConfig.label} (${level})
-    **Style Guide:** ${levelConfig.generationGuide}
-    **Target Length:** ${targetLength} words
 
-    **Mandatory Keywords:** ${mandatoryKeywords.length > 0 ? mandatoryKeywords.join(", ") : "None"}
+    const draftArticle = await buildDraftArticle({
+      apiKey,
+      baseUrl,
+      level,
+      levelLabel: levelConfig.label,
+      levelGuide: levelConfig.generationGuide,
+      targetLength,
+      specificTopic,
+      topicMeta,
+      mandatoryKeywords,
+      qualityRules,
+      selectedCandidate,
+    });
 
-    **Strict Requirements:**
-    1. **Format:** JSON only. NO markdown.
-    2. **Length:** ${targetLength} words.
-    3. **Content:** Neutral, educational, and exam-appropriate for the selected level. Avoid controversial politics.
-    4. **Level Fit:** Follow the target level exactly. Do not make Zhongkao/Gaokao passages sound like IELTS/TOEFL academic writing.
-    5. **Variety:** Use grammar patterns suitable for the level; avoid overcomplicating lower-level passages.
-    6. **Mandatory Keywords:** If keywords are provided, use every keyword naturally in context and build key test-style sentences around them.
-    7. **Self-Check:** Before output, verify the passage meets the level-specific quality bar below. If tone, vocabulary, logic, or length is off-level, rewrite first.
+    const reviewPrompt = `You are a strict English exam passage reviewer and rewriter.
 
-    **Level-Specific Quality Bar:**
-    ${qualityRules}
+Review the draft article and return the FINAL improved version as strict JSON only.
 
-    **Output JSON Structure:**
-    {
-      "title": "Engaging English Title",
-      "title_zh": "Simplified Chinese Title",
-      "content": "Full article text with paragraph breaks...",
-      "difficulty": "${level}",
-      "level": "${level}",
-      "tags": ["Tag1", "Tag2"],
-      "vocabulary": [
-        { "word": "word1", "phonetic": "/.../", "definition": "Chinese def", "example": "Sentence from text." }
-      ],
-      "sentences": [
-         { "original": "Complex sentence from text.", "translation": "Chinese trans.", "structure": "Analysis." }
-      ]
-    }`;
+Quality rubric:
+1. The topic must feel fresh and specific, not vague.
+2. Paragraph progression must be clear and logical.
+3. Sentence complexity must fit the target level exactly.
+4. Examples and explanations must be concrete, not template-like.
+5. Title, content, topic, and tags must align.
+6. Word count must stay within ${targetLength} words.
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+Target level: ${levelConfig.label} (${level})
+Level guide: ${levelConfig.generationGuide}
+Broad category: ${topicMeta?.label || topicPrompt}
+Broad tag: ${topicMeta?.broadTag || "General"}
+Topic: ${specificTopic}
+Mandatory keywords: ${mandatoryKeywords.join(", ") || "None"}
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: "Generate now." },
-          ],
-          temperature: 1.25, // 提高一点温度，增加创造性
-          stream: true,
-          response_format: { type: "json_object" },
-        }),
-        signal: controller.signal,
-      });
-      
-    clearTimeout(timeoutId);
+Draft article JSON:
+${JSON.stringify({
+  ...draftArticle,
+  difficulty: level,
+  level,
+  topic: specificTopic,
+})}
 
-    if (!response.ok) throw new Error(`AI API Error: ${response.status}`);
+Return strict JSON:
+{
+  "title": "English Title",
+  "title_zh": "Chinese Title",
+  "content": "Final polished article",
+  "difficulty": "${level}",
+  "level": "${level}",
+  "topic": "${specificTopic}",
+  "tags": ["${topicMeta?.broadTag || "General"}", "Tag2", "Tag3"],
+  "vocabulary": [],
+  "sentences": []
+}`;
+
+    const reviewResponse = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert English exam passage reviewer who returns strict JSON only.",
+          },
+          {
+            role: "user",
+            content: reviewPrompt,
+          },
+        ],
+        temperature: 0.45,
+        stream: true,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!reviewResponse.ok) {
+      throw new Error(`AI API Error: ${reviewResponse.status}`);
+    }
 
     return streamOpenAIResponse({
-      upstream: response,
-      parse: (raw) => parseJsonCompletion<any>(raw),
+      upstream: reviewResponse,
+      parse: (raw) => parseJsonCompletion<ArticlePayload>(raw),
       onDone: async (aiResult) => {
-        const outputSafety = checkContentSafety(`${aiResult.content || ""} ${aiResult.title || ""}`);
+        let finalized = {
+          ...aiResult,
+          difficulty: level,
+          level,
+          topic: specificTopic,
+          tags: enrichTags(aiResult.tags, topicMeta?.broadTag || "General"),
+        } satisfies ArticlePayload;
+
+        let validation = validateArticlePayload(finalized, targetLength);
+
+        for (let attempt = 0; !validation.isValid && attempt < MAX_REWRITE_ATTEMPTS; attempt += 1) {
+          const repaired = await repairArticlePayload({
+            apiKey,
+            baseUrl,
+            level,
+            levelLabel: levelConfig.label,
+            targetLength,
+            qualityRules,
+            specificTopic,
+            broadTag: topicMeta?.broadTag || "General",
+            article: finalized,
+            issues: validation.issues,
+          });
+
+          finalized = {
+            ...repaired,
+            difficulty: level,
+            level,
+            topic: specificTopic,
+            tags: enrichTags(repaired.tags, topicMeta?.broadTag || "General"),
+          };
+          validation = validateArticlePayload(finalized, targetLength);
+        }
+
+        if (!validation.isValid) {
+          throw new Error(`生成文章未通过质量校验: ${validation.issues.join(", ")}`);
+        }
+
+        const normalizedContent = typeof finalized.content === "string" ? finalized.content.trim() : "";
+        const outputSafety = checkContentSafety(`${normalizedContent} ${finalized.title || ""}`);
         if (!outputSafety.isSafe) {
           throw new Error("生成内容未通过安全审查，请重试。");
         }
-        const normalizedContent = typeof aiResult.content === "string" ? aiResult.content : "";
+
         const wordCount = countWords(normalizedContent);
+        const tags = enrichTags(finalized.tags, topicMeta?.broadTag || "General");
 
         const finalArticleData = {
           id: crypto.randomUUID(),
-          title: aiResult.title,
-          title_zh: aiResult.title_zh,
+          title: finalized.title,
+          title_zh: finalized.title_zh,
           content: normalizedContent,
           topic: specificTopic,
           difficulty: level,
           level,
           word_count: wordCount,
-          tags: aiResult.tags,
+          tags,
           user_id: userId,
           is_public: true,
-        };
-        const normalizedAiResult = {
-          ...aiResult,
-          content: normalizedContent,
-          difficulty: level,
-          level,
-          word_count: wordCount,
-          wordCount,
         };
 
         let savedArticle = null;
         try {
           const { data: inserted, error: insertError } = await supabase
-            .from('articles')
+            .from("articles")
             .insert([finalArticleData])
-            .select('*')
+            .select("*")
             .single();
           if (insertError) throw insertError;
           savedArticle = inserted;
@@ -239,16 +752,25 @@ export async function POST(req: Request) {
           console.error("Cache failed:", dbError);
         }
 
+        const finalPayload = {
+          ...finalized,
+          ...finalArticleData,
+          id: savedArticle?.id || finalArticleData.id,
+          created_at: savedArticle?.created_at || new Date().toISOString(),
+          word_count: wordCount,
+          wordCount,
+          tags,
+        };
+
         if (savedArticle) {
-          return { ...savedArticle, ...normalizedAiResult };
+          return { ...savedArticle, ...finalPayload };
         }
 
-        return { ...finalArticleData, ...normalizedAiResult };
+        return finalPayload;
       },
     });
-
   } catch (error: any) {
     console.error("Gen Error:", error);
-    return NextResponse.json({ error: "Generation failed, please try again." }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Generation failed, please try again." }, { status: 500 });
   }
 }

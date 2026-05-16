@@ -296,7 +296,7 @@ export default function SettingsPage() {
               </div>
 
               <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
-                专为英语备考打造的 AI 阅读助手。集成 DeepSeek V3.2 深度分析，帮助你突破阅读瓶颈。
+                专为英语备考打造的 AI 阅读助手。集成 DeepSeek V4 深度分析，帮助你突破阅读瓶颈。
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
@@ -314,7 +314,7 @@ export default function SettingsPage() {
               {/* Footer */}
               <div className="border-t border-slate-100 dark:border-slate-700 pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-slate-400 gap-2">
                 <span>设计与开发: <strong className="text-slate-600 dark:text-slate-300">Eiddie</strong></span>
-                <span>技术支持: DeepSeek V3.2 & Supabase</span>
+                <span>技术支持: DeepSeek V4 & Supabase</span>
               </div>
             </motion.div>
 
