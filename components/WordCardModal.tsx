@@ -10,7 +10,7 @@ import { useEffect, useState, useRef, useCallback, memo } from "react";
  * 2. 提供发音播放功能。
  * 3. 提供“移除”按钮，调用 `wordStore` 从生词本中删除该词。
  */
-import { X, Share2, Download, Loader2, Quote } from "lucide-react";
+import { X, Share2, Download, Loader2, Quote, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
@@ -30,12 +30,21 @@ interface CardGenResult {
   translation: string;
 }
 
+const WORD_CARD_SHOW_CHINESE_KEY = "word-card-show-chinese-v1";
+
 export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, wordData }: WordCardModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [cardContent, setCardContent] = useState<CardGenResult | null>(null);
   const [streamPreview, setStreamPreview] = useState("");
+  const [showChinese, setShowChinese] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
   const partialCard = getCardPreview(streamPreview);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedPreference = window.localStorage.getItem(WORD_CARD_SHOW_CHINESE_KEY);
+    setShowChinese(storedPreference !== "0");
+  }, []);
 
   const generateCardContent = useCallback(async () => {
     if (!wordData) return;
@@ -76,6 +85,16 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
       setStreamPreview("");
     }
   }, [isOpen, wordData, generateCardContent]);
+
+  const handleToggleChinese = () => {
+    setShowChinese((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(WORD_CARD_SHOW_CHINESE_KEY, next ? "1" : "0");
+      }
+      return next;
+    });
+  };
 
   const handleDownload = async () => {
     if (!cardRef.current || !wordData) return;
@@ -214,9 +233,17 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
 
                   <div className="w-12 h-1 bg-primary-500/30 mx-auto rounded-full" />
 
-                  <p className="text-stone-700 dark:text-stone-300 font-medium leading-relaxed">
-                    {wordData?.definition}
-                  </p>
+                  <div className="min-h-[52px]">
+                    {showChinese ? (
+                      <p className="text-stone-700 dark:text-stone-300 font-medium leading-relaxed">
+                        {wordData?.definition}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-stone-400 dark:text-stone-500 italic">
+                        中文释义已隐藏
+                      </p>
+                    )}
+                  </div>
 
                   {partialCard && (
                     <div className="relative mt-6 pt-6 border-t border-stone-200 dark:border-stone-800">
@@ -230,7 +257,7 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
                         <p className="text-xs text-stone-500 dark:text-stone-500 font-medium tracking-wide uppercase">
                           — The Economist Style
                         </p>
-                        {partialCard.translation && (
+                        {showChinese && partialCard.translation && (
                           <p className="text-sm text-stone-600 dark:text-stone-400 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-3">
                             {partialCard.translation}
                           </p>
@@ -260,9 +287,17 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
                   <div className="w-12 h-1 bg-primary-500/30 mx-auto rounded-full" />
 
                   {/* Definition */}
-                  <p className="text-stone-700 dark:text-stone-300 font-medium leading-relaxed">
-                    {wordData.definition}
-                  </p>
+                  <div className="min-h-[52px]">
+                    {showChinese ? (
+                      <p className="text-stone-700 dark:text-stone-300 font-medium leading-relaxed">
+                        {wordData.definition}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-stone-400 dark:text-stone-500 italic">
+                        中文释义已隐藏
+                      </p>
+                    )}
+                  </div>
 
                   {/* AI Context */}
                   <div className="relative mt-6 pt-6 border-t border-stone-200 dark:border-stone-800">
@@ -274,9 +309,11 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
                       <p className="text-xs text-stone-500 dark:text-stone-500 font-medium tracking-wide uppercase">
                         — The Economist Style
                       </p>
-                      <p className="text-sm text-stone-600 dark:text-stone-400 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-3">
-                        {cardContent.translation}
-                      </p>
+                      {showChinese && (
+                        <p className="text-sm text-stone-600 dark:text-stone-400 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-3">
+                          {cardContent.translation}
+                        </p>
+                      )}
                     </blockquote>
                   </div>
                 </div>
@@ -284,7 +321,15 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
             </div>
 
             {/* Footer Actions */}
-            <div className="p-4 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 flex gap-3">
+            <div className="p-4 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 space-y-3">
+              <button
+                onClick={handleToggleChinese}
+                className="w-full py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors"
+              >
+                {showChinese ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showChinese ? "隐藏中文释义" : "显示中文释义"}
+              </button>
+              <div className="flex gap-3">
               <button
                 onClick={() => {
                   triggerHaptic();
@@ -303,6 +348,7 @@ export const WordCardModal = memo(function WordCardModal({ isOpen, onClose, word
               >
                 <Share2 className="w-5 h-5" />
               </button>
+              </div>
             </div>
           </motion.div>
         )}

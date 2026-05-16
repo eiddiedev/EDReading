@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkContentSafety } from '@/lib/safety';
-import { shuffle, flattenWords, pickMandatoryKeywords, TOPIC_VOCAB_LABELS } from '@/lib/vocab-utils';
+import { pickMandatoryKeywords } from '@/lib/vocab-utils';
 import { parseJsonCompletion, streamOpenAIResponse } from '@/lib/ai-stream';
 import { formatQualityRules, getReadingLevel, normalizeReadingLevelId } from '@/lib/reading-levels';
 
@@ -51,6 +51,11 @@ const TOPIC_ANGLES: Record<string, string[]> = {
   ]
 };
 
+const countWords = (input: string) => {
+  const normalized = input.trim();
+  if (!normalized) return 0;
+  return normalized.split(/\s+/).length;
+};
 /**
  * 根据主题和难度等级生成新的阅读文章。
  * 
@@ -196,23 +201,29 @@ export async function POST(req: Request) {
         if (!outputSafety.isSafe) {
           throw new Error("生成内容未通过安全审查，请重试。");
         }
+        const normalizedContent = typeof aiResult.content === "string" ? aiResult.content : "";
+        const wordCount = countWords(normalizedContent);
 
         const finalArticleData = {
           id: crypto.randomUUID(),
           title: aiResult.title,
           title_zh: aiResult.title_zh,
-          content: aiResult.content,
+          content: normalizedContent,
           topic: specificTopic,
           difficulty: level,
           level,
+          word_count: wordCount,
           tags: aiResult.tags,
           user_id: userId,
           is_public: true,
         };
         const normalizedAiResult = {
           ...aiResult,
+          content: normalizedContent,
           difficulty: level,
           level,
+          word_count: wordCount,
+          wordCount,
         };
 
         let savedArticle = null;

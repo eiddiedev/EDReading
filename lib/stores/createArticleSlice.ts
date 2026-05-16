@@ -170,7 +170,13 @@ export const createArticleSlice: StateCreator<AppState, [], [], ArticleSlice> = 
       }
     }
 
-    const normalizedArticle = article.id ? article : { ...article, id: crypto.randomUUID() };
+    const derivedWordCount =
+      article.wordCount && article.wordCount > 0
+        ? article.wordCount
+        : article.content
+          ? article.content.trim().split(/\s+/).filter(Boolean).length
+          : 0;
+    const normalizedArticle = article.id ? { ...article, wordCount: derivedWordCount } : { ...article, id: crypto.randomUUID(), wordCount: derivedWordCount };
     const rawTitle = typeof normalizedArticle.title === "string" ? normalizedArticle.title.trim() : "";
     const topic = typeof normalizedArticle.topic === "string" ? normalizedArticle.topic.trim() : "";
     const fallbackTitle = topic ? `Reading: ${topic}` : "Reading";
