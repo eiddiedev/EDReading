@@ -10,12 +10,13 @@
  * 3. 提供添加到生词本的交互，支持状态反馈（加载中、已添加）。
  */
 import { useEffect, useRef, useState, memo } from "react";
-import { Plus, X, Check, Sparkles, Volume2 } from "lucide-react";
+import { Plus, X, Check, Sparkles, Volume2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { DictionaryResult } from "@/types";
 import { useAppStore } from "@/lib/store";
 import { motion, AnimatePresence, PanInfo, useDragControls } from "framer-motion";
 import { getDictionaryPreview } from "@/lib/stream-preview";
+import { useChineseDisplayPreference } from "@/lib/chinese-display-preference";
 
 interface DictionaryModalProps {
   result: DictionaryResult | null;
@@ -51,6 +52,7 @@ export const DictionaryModal = memo(function DictionaryModal({
   const lastAutoPlayedWordRef = useRef<string | null>(null);
   const playingAudioRef = useRef<HTMLAudioElement | null>(null);
   const dragControls = useDragControls();
+  const { showChinese, toggleShowChinese } = useChineseDisplayPreference();
   const baseResult = result || localResult || remoteResult;
   const streamResult = getDictionaryPreview(streamText, currentWord || baseResult?.word);
 
@@ -154,6 +156,8 @@ export const DictionaryModal = memo(function DictionaryModal({
     if (!hasHeaderContent) return null;
 
     const hasMeanings = detailResult?.meanings && detailResult.meanings.length > 0;
+    const fallbackDefinition = detailResult?.definition || "";
+    const fallbackDefinitionContainsChinese = /[\u4e00-\u9fff]/.test(fallbackDefinition);
 
     return (
       <>
@@ -203,7 +207,11 @@ export const DictionaryModal = memo(function DictionaryModal({
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
               中文释义
             </h3>
-            {isChineseLoading ? (
+            {!showChinese ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                中文释义已隐藏
+              </p>
+            ) : isChineseLoading ? (
               headerResult?.cnDefinition ? (
                 <p className="text-xl text-slate-800 dark:text-slate-200 font-semibold">
                   {headerResult.cnDefinition}
@@ -261,9 +269,15 @@ export const DictionaryModal = memo(function DictionaryModal({
                   <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
                     📖 释义
                   </h3>
-                  <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
-                    {detailResult.definition}
-                  </p>
+                  {!showChinese && fallbackDefinitionContainsChinese ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                      中文释义已隐藏
+                    </p>
+                  ) : (
+                    <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
+                      {detailResult.definition}
+                    </p>
+                  )}
                   {detailResult.usage && (
                     <p className="mt-3 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                       {detailResult.usage}
@@ -283,7 +297,7 @@ export const DictionaryModal = memo(function DictionaryModal({
                         <p className="text-slate-700 dark:text-slate-300 italic font-serif">
                           &ldquo;{ex.sentence}&rdquo;
                         </p>
-                        {ex.translation && (
+                        {showChinese && ex.translation && (
                           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                             {ex.translation}
                           </p>
@@ -303,7 +317,7 @@ export const DictionaryModal = memo(function DictionaryModal({
                     <p className="text-slate-700 dark:text-slate-300 italic mb-2 font-serif">
                       &ldquo;{detailResult.example}&rdquo;
                     </p>
-                    {detailResult.exampleTranslation && (
+                    {showChinese && detailResult.exampleTranslation && (
                       <p className="text-sm text-slate-500 dark:text-slate-400">
                         {detailResult.exampleTranslation}
                       </p>
@@ -352,6 +366,23 @@ export const DictionaryModal = memo(function DictionaryModal({
                <>
                  <Plus className="w-5 h-5" />
                  加入生词本
+               </>
+             )}
+           </button>
+
+           <button
+             onClick={toggleShowChinese}
+             className="w-full py-3 rounded-xl font-semibold text-base flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
+           >
+             {showChinese ? (
+               <>
+                 <EyeOff className="w-5 h-5" />
+                 隐藏中文释义
+               </>
+             ) : (
+               <>
+                 <Eye className="w-5 h-5" />
+                 显示中文释义
                </>
              )}
            </button>

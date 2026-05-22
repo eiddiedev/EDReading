@@ -7,17 +7,47 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 
+const PORTAL_LINKS_CACHE_KEY = "portal-links-cache-v1";
 interface PortalClientProps {
-  initialLinks: PortalLink[];
-  user: any;
+  initialLinks?: PortalLink[];
+  user?: any;
 }
 
-export default function PortalClient({ initialLinks, user: initialUser }: PortalClientProps) {
+const getPortalCacheKey = (userId?: string | null) =>
+  `${PORTAL_LINKS_CACHE_KEY}:${userId || "guest"}`;
+
+const readCachedLinks = (userId?: string | null) => {
+  if (typeof window === "undefined") return [] as PortalLink[];
+
+  const raw = window.localStorage.getItem(getPortalCacheKey(userId));
+  if (!raw) return [] as PortalLink[];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed as PortalLink[];
+    }
+  } catch (error) {
+    console.error("Failed to parse portal cache:", error);
+    window.localStorage.removeItem(getPortalCacheKey(userId));
+  }
+
+  return [] as PortalLink[];
+};
+
+const writeCachedLinks = (userId: string | null | undefined, links: PortalLink[]) => {
+  if (typeof window === "undefined") return;
+  const resolvedUserId = userId || "guest";
+  window.localStorage.setItem(getPortalCacheKey(resolvedUserId), JSON.stringify(links));
+};
+
+export default function PortalClient({ initialLinks = [], user: initialUser = null }: PortalClientProps) {
   const [links, setLinks] = useState<PortalLink[]>(initialLinks);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeLink, setActiveLink] = useState<PortalLink | null>(null);
   const [iframeLoading, setIframeLoading] = useState(true);
   const [user, setUser] = useState<any>(initialUser);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   // Form State
   const [formData, setFormData] = useState<Partial<PortalLink>>({
@@ -28,19 +58,57 @@ export default function PortalClient({ initialLinks, user: initialUser }: Portal
   });
 
   useEffect(() => {
-    // 监听 Auth 变化，确保客户端状态与会话同步
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!isMounted) return;
+
+      const nextUser = session?.user || initialUser || null;
+      setUser(nextUser);
+
+      const cachedLinks = readCachedLinks(nextUser?.id);
+      if (cachedLinks.length > 0) {
+        setLinks(cachedLinks);
+      } else if (!nextUser) {
+        setLinks([]);
+      }
+
+      setIsBootstrapping(false);
+
+      if (nextUser) {
+        void fetchLinks(nextUser.id);
+      }
+    };
+
+    bootstrap();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-       setUser(session?.user || null);
-       // 如果用户变化，可能需要重新获取链接 (虽然服务端已传初始数据，但防止登出/登入切换)
-       if (session?.user && session.user.id !== initialUser?.id) {
-         fetchLinks(session.user.id);
-       } else if (!session?.user) {
-         setLinks([]);
-       }
+      const nextUser = session?.user || null;
+      setUser(nextUser);
+
+      const cachedLinks = readCachedLinks(nextUser?.id);
+      setLinks(cachedLinks);
+
+      if (nextUser) {
+        void fetchLinks(nextUser.id);
+      } else {
+        setActiveLink(null);
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, [initialUser?.id]);
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [initialUser]);
+
+  useEffect(() => {
+    writeCachedLinks(user?.id, links);
+  }, [links, user?.id]);
 
   const fetchLinks = async (userId: string) => {
      const { data, error } = await supabase
@@ -60,10 +128,6 @@ export default function PortalClient({ initialLinks, user: initialUser }: Portal
        }));
        setLinks(mapped);
      }
-  };
-
-  const saveLinks = (newLinks: PortalLink[]) => {
-    setLinks(newLinks);
   };
 
   const handleAdd = async (e?: React.MouseEvent) => {
@@ -234,8 +298,17 @@ export default function PortalClient({ initialLinks, user: initialUser }: Portal
 
             {links.length === 0 && (
               <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-                <Globe className="w-12 h-12 mb-4 opacity-20" />
-                <p>暂无链接，请添加第一个！</p>
+                {isBootstrapping ? (
+                  <>
+                    <Loader2 className="w-12 h-12 mb-4 opacity-40 animate-spin" />
+                    <p>正在恢复本地导航缓存...</p>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-12 h-12 mb-4 opacity-20" />
+                    <p>暂无链接，请添加第一个！</p>
+                  </>
+                )}
               </div>
             )}
           </div>
