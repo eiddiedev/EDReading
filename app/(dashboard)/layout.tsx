@@ -34,6 +34,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="md:ml-64 pb-20 md:pb-0">
         <GlobalAnnouncement />
         {children}
+        <footer className="flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500 py-4">
+          <img src="/beian-icon.png" alt="公安备案" className="h-4 w-auto inline-block" />
+          <a href="https://beian.mps.gov.cn/#/query/webSearch?code=61012502000367" target="_blank" rel="noreferrer">
+            陕公网安备61012502000367号
+          </a>
+          <span className="text-slate-300 dark:text-slate-600">|</span>
+          <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+            陕ICP备2026009305号-1
+          </a>
+        </footer>
       </div>
       <BottomTab />
     </div>
